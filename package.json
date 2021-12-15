@@ -1,0 +1,40 @@
+{
+  "name": "@dreamworld/firestore-redux",
+  "version": "0.0.0-development",
+  "description": "Library which sync cloud firestore data with redux state.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DreamworldSolutions/firestore-redux.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/DreamworldSolutions/firestore-redux/issues"
+  },
+  "homepage": "https://github.com/DreamworldSolutions/firestore-redux#readme",
+  "dependencies": {
+    "firebase": "true9.6.1"
+  },
+  "devDependencies": {},
+  "publishConfig": {
+    "access": "public"
+  },
+  "resolutions": {
+    "tslib": "2.1.0"
+  },
+  "release": {
+    "branches": [
+      "+([0-9])?(.{+([0-9]),x}).x",
+      "master",
+      {
+        "name": "feature/*",
+        "prerelease": "${name.replace(/^feature\\//g,\"\")}",
+        "channel": "${name.replace(/^feature\\//g,\"\")}"
+      }
+    ]
+  }
+}
