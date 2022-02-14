@@ -116,7 +116,7 @@ store.dispatch(firestoreRedux.actions.save(docs, target));
 
 ##### Arguments
 
-- `docs (Object)` Key Value map of documents. Key is the `/` seperated path where document is stored on firestore. e.g. `users/$userId` & value is the document. e.g `{'users/$userId': {name, firstNamme, lastName}}`
+- `docs (Object)` Key Value map of documents. Key is the `/` seperated path where document is stored on firestore. e.g. `users/$userId` & value is the document. e.g `{'users/$userId': {name, firstNamme, lastName}}`. Value may contain only fields which should be updated.  e.g. `{'users/$userId': {lastSeen: 234234234}}`. In this example, only `lastSeen` field will be updated.
 - `target (String)`. Possible vlaues: `BOTH`, `LOCAL` or `REMOTE`. Default is `BOTH`.
   - When `target="BOTH"`, saves documents in local state first, after that saves it on firestore.
   - When `target="LOCAL"`, saves documents only in local state.

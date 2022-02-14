@@ -371,7 +371,7 @@ function* save({ docs, target = "BOTH", prevState }) {
       );
     }
     const ref = fsDoc(DB, ...pathSegments);
-    batch.set(ref, doc);
+    batch.set(ref, doc, { merge: true });
   });
   try {
     yield call(batch.commit.bind(batch));

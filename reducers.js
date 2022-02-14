@@ -6,6 +6,8 @@ import get from "lodash-es/get";
 import forEach from "lodash-es/forEach";
 import isEqual from "lodash-es/isEqual";
 import filter from "lodash-es/filter";
+import merge from "lodash-es/merge";
+import cloneDeep from "lodash-es/cloneDeep";
 import { ReduxUtils } from "@dw/pwa-helpers/redux-utils";
 
 const firestoreReducer = (state = INITIAL_STATE, action) => {
@@ -140,11 +142,14 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
 
     case actions.SAVE:
       if (action.target !== "REMOTE") {
-        forEach(action.docs, (doc, path) => {
+        const docs = cloneDeep(action.docs);
+        forEach(docs, (doc, path) => {
           const pathSegments = path.split("/");
           const collection = pathSegments[pathSegments.length - 2];
           const docId = pathSegments[pathSegments.length - 1];
+          const currDoc = cloneDeep(get(state, `docs.${collection}.${docId}`, {}));
           doc._syncPending = true;
+          doc = merge(currDoc, doc);
           oState = ReduxUtils.replace(
             oState,
             `docs.${collection}.${docId}`,
