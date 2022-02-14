@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Firestore Redux Demo</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: "Roboto", "Noto", Arial, Verdana, helvetica, sans-serif;
+        --mdc-theme-primary: #3a95c9;
+      }
+
+      header {
+        background-color: var(--mdc-theme-primary);
+        display: flex;
+        align-items: center;
+        height: 56px;
+        padding: 0 16px;
+        color: floralwhite;
+        letter-spacing: 0.05em;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+      }
+    </style>
+
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Roboto fonts  -->
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css?family=Roboto:300,400,500&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css?family=Roboto:300,400,500&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
+
+    <script>
+      (window.process = window.process || {}).env = {};
+    </script>
+  </head>
+  <body>
+    <header><h4>Firestore Redux Demo</h4></header>
+    <firestore-redux-demo></firestore-redux-demo>
+    <script type="module" src="./demo/firestore-redux-demo.js"></script>
+  </body>
+</html>
