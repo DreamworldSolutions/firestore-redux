@@ -20,6 +20,15 @@ export const docs = (state, collection) =>
   values(get(state, `firestore.docs.${collection}`));
 
 /**
+ * @returns {Array} All documents of given queryId & collection id.
+ */
+export const docsByQueryId = createSelector(
+  (state, collection, queryId) => query(state, queryId),
+  docs,
+  (query, docs) => {}
+);
+
+/**
  * @param {Object} state Redux State.
  * @param {String} id Query Id
  * @returns {Object} Query details. e.g {id, requesterId, request, status, error}

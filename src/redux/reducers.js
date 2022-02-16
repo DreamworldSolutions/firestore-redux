@@ -31,7 +31,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
         once: action.once,
       });
 
-    case actions.UPDATE_QUERY:
+    case actions.LOAD_NEXT_PAGE:
       oState = ReduxUtils.replace(
         oState,
         `queries.${action.id}.status`,
@@ -49,7 +49,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       );
       return oState;
 
-    case actions.RESTART_QUERY:
+    case actions.RETRY_QUERY:
       oState = ReduxUtils.replace(
         oState,
         `queries.${action.id}.status`,

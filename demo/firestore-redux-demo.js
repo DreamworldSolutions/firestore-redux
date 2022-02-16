@@ -2,8 +2,8 @@ import { html, css, LitElement, unsafeCSS } from "lit";
 import { connect } from "@dreamworld/pwa-helpers/connect-mixin";
 import isEmpty from "lodash-es/isEmpty";
 import cloneDeep from "lodash-es/cloneDeep";
-import { store, sagaMiddleware } from "./store";
-import * as firestoreRedux from "../index.js";
+import { store } from "./store";
+import firestoreRedux from "../src/firestore-redux";
 import { initializeApp } from "firebase/app";
 import "@dreamworld/dw-input/dw-textarea";
 import "@dreamworld/dw-input/dw-input";
@@ -257,7 +257,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
             label="Collection"
             value="${this._query.collection}"
             required
-            placeholder="Enter Collection Id"
+            placeholder="Enter Collection/Subcollection path"
             @value-changed=${(e) => {
               this._query.collection = e.detail.value;
             }}
@@ -446,9 +446,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     try {
       this._firebaseConfig = JSON.parse(this._firebaseConfigString);
       this._firebaseApp = initializeApp(this._firebaseConfig);
-      store.dispatch(
-        firestoreRedux.actions.init(store, sagaMiddleware, this._firebaseApp)
-      );
+      firestoreRedux.init(store, this._firebaseApp);
     } catch (err) {
       console.error(err);
       alert("Something is wrong. Please see the error detail in console.");
@@ -456,10 +454,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
   }
 
   __requestQuery() {
-    if (
-      isEmpty(this._query) ||
-      !this._query.collection
-    ) {
+    if (isEmpty(this._query) || !this._query.collection) {
       alert("Please provide Mandatory fields.");
       return;
     }
@@ -478,7 +473,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     query.where = this._query.where && JSON.parse(this._query.where);
     query.orderBy = this._query.orderBy && JSON.parse(this._query.orderBy);
 
-    store.dispatch(firestoreRedux.actions.query(query));
+    firestoreRedux.query(query);
   }
 
   __cancelQuery() {
@@ -486,9 +481,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
       alert("Please enter queryId");
       return;
     }
-    store.dispatch(
-      firestoreRedux.actions.cancelQuery({ id: this._cancelQueryId })
-    );
+    firestoreRedux.cancelQuery({ id: this._cancelQueryId });
   }
 
   __cancelQueryByRequester() {
@@ -496,11 +489,9 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
       alert("Please enter requesterId");
       return;
     }
-    store.dispatch(
-      firestoreRedux.actions.cancelQuery({
-        requesterId: this._cancelRequesterId,
-      })
-    );
+    firestoreRedux.actions.cancelQuery({
+      requesterId: this._cancelRequesterId,
+    });
   }
 
   __saveDocs() {
@@ -508,12 +499,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
       alert("Please Enter valid Object string of documents..");
       return;
     }
-    store.dispatch(
-      firestoreRedux.actions.save(
-        JSON.parse(this._saveDocsString),
-        this._saveTarget
-      )
-    );
+    firestoreRedux.save(JSON.parse(this._saveDocsString), this._saveTarget);
   }
 
   __deleteDocs() {
@@ -524,14 +510,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
       alert("Please Enter valid Array string of paths..");
       return;
     }
-    store.dispatch(
-      firestoreRedux.actions.deleteDocs(JSON.parse(this._deleteDocsString))
-    );
-  }
-
-  async __waitTillQueryResponse() {
-    const res = await firestoreRedux.utils.waitTillQueryResponse('test-q');
-    console.log({ res });
+    firestoreRedux.deleteDocs(JSON.parse(this._deleteDocsString));
   }
 
   /**

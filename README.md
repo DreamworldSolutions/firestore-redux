@@ -1,255 +1,135 @@
 # firestore-redux
 
-## Introduction
+An offline-first + real-time database using Firestore + Redux.
 
-- Syncs firestore data with redux state.
-- Provides a way to write or delete firestore data with localWrite into redux state.
+## Basic Usage
+> This guide is just for basic use-cases. For more details about all methods & selectors, [See Reference Guide](./wiki/user-reference-guide.md)
 
-## Usage
-
-### 1. Import
+### Initialization
 
 ```js
-import * as firestoreRedux from "@dreamworld/firestore-redux";
-import { store, sagaMiddleware } from "./store.js"; // This is store.js PATH of your application where store & sagaMiddleware are created using `crateStore` & `createSagaMiddleware` respectivelly. So replace it if required.
+import { initializeApp } from "firebase/app";
+import firestoreRedux from "@dreamworld/firestore-redux";
+import { store } from "./store.js"; // This is store.js PATH of your application where store is created using `createStore` So replace it if required.
+const firebaseConfig = {} // Firebase Configurations.
+
+const firebaseApp = initializeApp(firebaseConfig);
+firestoreRedux.init(store, firebaseApp);
 ```
 
-### 2. Initialization
+### Read documents by query criteria.
 
-- This library assumes that Firebase App has been initialized by application.
-- So initialize this after firebase initialization.
-  > Note that [redux-thunk](https://github.com/reduxjs/redux-thunk) & [redux-saga](https://redux-saga.js.org/docs/introduction/GettingStarted) middlewares must be applied on the `store` as this library uses those both middlewares.
+```javascript
+import firestoreRedux from "@dreamworld/firestore-redux";
 
-```js
-store.dispatch(firestoreRedux.actions.init(store, sagaMiddleware, firebaseApp));
+// Realtime query
+const queryRef = firestoreRedux.query(collection, queryCriteria);
+
+// 1 time query.
+const queryRef = firestoreRedux.query(collection, {once: true});
+
+// Get Query Id from queryRef.
+const queryId = queryRef.id;
+
+// Wait till query response.
+const response = await queryRef.response(); // Resolved when query succeed or failed.
+const result = response.result; // Query result. e.g. [$queryId1, $queryId2, $queryId3, ...]
+const error = response.error; // Query error. e.g. {code, message}
+
+// Retry failed query.
+queryRef.retry();
 ```
 
-##### Arguments
+### Read document by it's ID.
+```javascript
+import firestoreRedux from "@dreamworld/firestore-redux";
 
-- `store (Object)` Redux Store. It is mandatory.
-- `sagaMiddleware (Object)` Saga Middleware. It is mandatory.
-- `firebaseApp (Object)` Firebase app instance. It is optional. If not provided, library by default uses default instance of the Firebase App.
+// Realtime query.
+const queryRef = firestoreRedux.getDocById(collection, documentId, {requesterId});
 
-### [Actions](./actions.js)
+// 1 time query.
+const queryRef = firestoreRedux.getDocById(collection, documentId, {once: true});
 
-#### 1. query
+// Get Query Id.
+const id = queryRef.id;
 
-- Reads data from the firestore for given collection/subcollection.
+// Wait till response of the request.
+const response = await queryRef.response(); // Resolved when query succeed or failed.
+const result = response.result; // Query result. e.g. [$queryId1, $queryId2, $queryId3, ...]
+const error = response.error; // Query error. e.g. {code, message}
 
-```js
-store.actions.dispatch(
-  firestoreRedux.actions.query({
-    id,
-    requesterId,
-    collection,
-    where,
-    orderBy,
-    startAt,
-    startAfter,
-    endAt,
-    endBefore,
-    limit,
-    once,
-  })
-);
+// Retry failed query.
+queryRef.retry();
+
 ```
 
-##### Arguments
+### Cancel / Stop queries
+```javascript
+import firestoreRedux from "@dreamworld/firestore-redux";
 
-- `id (String)` It is optional. But if its provided, it must be unique id.
-- `requesterId (String)` Requester Id.
-- `collection (String)` Collection or subcollection ID. It cannot contain a slash. It is mandatory.
-- `where (Array)` List of where conditions. e.g. `[['firstName', '==', 'Nirmal'], ['lastName', '==', 'Baldaniya']]` It is optional.
-- `orderBy (Array)` List of orderBy fields. e.g. `[['lastSeen', 'asc'], ['age', 'desc']]` It is optional.
-- `startAt (Any)` The field values to start this query at, in order of the query's order by. It is optional.
-- `startAfter (Any)` The field values to start this query after, in order of the query's order by. It is optional.
-- `endAt (Any)` The field values to end this query at, in order of the query's order by. It is optional.
-- `endBefore (Any)` The field values to end this query before, in order of the query's order by. It is optional.
-- `limit (Number)` The maximum number of items in result. It is optional.
-- `once (Boolean)` When `true`, does not subscribe for realtime changes. It is optional.
+// Cancel by queryRef.
+queryRef.cancel();
 
-#### 2. updateQuery
+// Cancel by query Id.
+firestoreRedux.cancelQuery({id});
 
-- Updates `LIVE` query to fetch more records. This is useful for the pagination.
+// Cance by requester Id.
+firestoreRedux.cancelQuery({requesterId});
+
+```
+
+### Load Next Page documents.
+> This will work only when `limit` query criteria is given & query is realtime.
+```javascript
+import firestoreRedux from "@dreamworld/firestore-redux";
+
+const queryRef = firestoreRedux.query(collection, {limit: 50}); // This will load 50 documents.
+queryRef.loadNextPage(); // This will load 100 documents.
+```
+
+### Get Documents from Redux State  using Selectors.
+```javascript
+
+// Get list of documents which are in result of the query.
+const docs = firestoreRedux.selectors.docsByQueryId(state, collection, queryId); // [{id, ...}, {id, ...}, ...]
+
+// Get all documents for given collection.
+const docs = firestoreRedux.selectors.docs(state, collection); // [{id, ...}, {id, ...}, ...]
+
+// Get single document by it's ID.
+const doc = firestoreRedux.selectors.doc(state, collection, docId); // {id, ...}
+```
+
+### Save documents.
 
 ```JS
-store.dispatch(firestoreRdux.actions.updateQuery({id, limit}));
+// Save documents on local + remote both.
+const response = firestoreRedux.save(collection, docs);
+
+// Save documents only in redux state.
+firestoreRedux.save(collection, docs, { localWrite: true, remoteWrite: false });
+
+// Save documents only on remote.
+const response = firestoreRedux.save(collection, docs, { localWrite: false, remoteWrite: true });
 ```
+> `response` in the above example is a `Promise` which will be resolved when the documents are saved successfully on remote. It will be resolved on failed write operation.
+So wait on it only when you want to wait for the remote changes because documents are saved in redux state already.
 
-##### Arguments
-
-- `id (String)` Query Id.
-- `limit (Number)` The maximum number of items in result.
-
-#### 3. restartQuery
-
-- Restarts `CLOSED` or `FAILED` query again.
+### Delete documents.
 
 ```JS
-store.dispatch(firestoreRdux.actions.restartQuery(id));
+// Delete documents from local + remote both.
+const response = firestoreRedux.delete(collection, docIds);
+
+// Delete documents from local only.
+firestoreRedux.delete(collection, docIds, {localWrite: true, remoteWrite: false });
+
+// Delete documents from remote only.
+const response = firestoreRedux.delete(collection, docIds, { remoteWrite: true, localWrite: false });
 ```
+> `response` in the above example is a `Promise` which will be resolved when the documents are deleted successfully from remote. It will be resolved on failed write operation.
+So wait on it only when you want to wait for the remote changes because documents are deleted from redux state already.
 
-##### Arguments
 
-- `id (String)` Query Id.
-
-#### 4. cancelQuery
-
-- Cancels live query/queries by it's id or requester id.
-
-```JS
-store.dispatch(firestoreRedux.actions.cancelQuery({id, requesterId}));
-```
-
-##### Arguments
-
-- `id (String)` Query Id.
-- `requesterId` (String) Requester Id.
-
-#### 5. save
-
-- Saves document to local & firestore as well.
-
-```JS
-store.dispatch(firestoreRedux.actions.save(docs, target));
-```
-
-##### Arguments
-
-- `docs (Object)` Key Value map of documents. Key is the `/` seperated path where document is stored on firestore. e.g. `users/$userId` & value is the document. e.g `{'users/$userId': {name, firstNamme, lastName}}`. Value may contain only fields which should be updated.  e.g. `{'users/$userId': {lastSeen: 234234234}}`. In this example, only `lastSeen` field will be updated.
-- `target (String)`. Possible vlaues: `BOTH`, `LOCAL` or `REMOTE`. Default is `BOTH`.
-  - When `target="BOTH"`, saves documents in local state first, after that saves it on firestore.
-  - When `target="LOCAL"`, saves documents only in local state.
-  - When `target="REMOTE"`, saves documents only on remote database.
-
-#### 6. deleteDocs
-
-- Deletes document from the local & remote both.
-
-```JS
-store.dispatch(firestoreRedux.actions.deleteDocs(paths, target="BOTH"));
-```
-
-##### Arguments
-
-- `paths (Array)` `/` seperated path where document is stored on firestore. e.g. `['users/$userId1', 'users/$userId2']`. Here document at `$userId1` & `$userId2` will be deleted.
-- `target (String)`. Possible vlaues: `BOTH`, `LOCAL` or `REMOTE`. Default is `BOTH`.
-  - When `target="BOTH"`, deletes documents from local state first, after that deletes from firestore.
-  - When `target="LOCAL"`, deletes documents from local state only.
-  - When `target="REMOTE"`, deletes documents from remote database only.
-
-### [Selectors](./selectors.js)
-
-#### 1. doc
-
-- Gets document with it's local data for given document ID.
-
-```JS
-const doc = firestoreRedux.selectors.doc(state, collection, docId);
-```
-
-##### Arguments
-
-- `state (Object)` Redux state.
-- `collection (String)` Collection ID.
-- `docId (String)` Document Id
-
-##### returns
-
-- `(Object)` e.g. `{ id, firstName, lastName, profilePic }`
-
-#### 2. docs
-
-- Gets all documents of the given collection ID.
-
-```JS
-const docs = firestoreRedux.selectors.docs(state, collection);
-```
-
-##### Arguments
-
-- `state (Object)` Redux state.
-- `collection (String)` Collection ID.
-
-##### returns
-
-- `(Array)` e.g. `[ { id, firstName, lastName, profilePic },{ id, firstName, lastName, profilePic } ]`
-
-#### 3. query
-
-- Gets query detail by it's ID.
-
-```JS
-const query = firestoreRedux.selectors.query(state, id);
-```
-
-##### Arguments
-
-- `state (Object)` Redux state.
-- `id (String)` Query ID
-
-##### returns
-
-- `(Object)` e.g. `{ id, requesterId, collection, request, result, status, error }`
-
-#### 4. queryStatus
-
-- Gets query status by it's ID.
-
-```JS
-const status = firestoreRedux.selectors.queryStatus(state, id);
-```
-
-##### Arguments
-
-- `state (Object)` Redux state.
-- `id (String)` Query ID
-
-##### returns
-
-- `(String)` Possible values: `PENDING`, `LIVE`, `CLOSED` or `FAILED`.
-
-#### 5. queryError
-
-- Gets query error detail by it's ID.
-
-```JS
-const error = firestoreRedux.selectors.queryError(state, id);
-```
-
-##### Arguments
-
-- `state (Object)` Redux state.
-- `id (String)` Query ID
-
-##### returns
-
-- `(Object)` e.g. `{ code, message }`
-
-### [Utils](./utils.js)
-
-#### 1. waitTillQueryResponse
-
-- Waits till query for given query id is succeed / failed.
-- Resolves promise when query succeed, failed or timeout.
-  - When query is succeed, resolved with query result.
-  - When query is failed or timeout, resolved with `undefined`
-    > This method is useful mainly when next logic depends on query result.
-
-```JS
-const promise = firestoreRedux.utils.waitTillQueryResponse(queryId, timeout);
-```
-
-##### Arguments
-
-- `queryId (String)` Query ID.
-- `timeout (Number)` timeout in milliseconds. Default is 60000 (1 minute).
-
-##### returns
-
-- `(Promise)` Promise will be resolved when query succeed, failed or timeout.
-
-### Developer docs
-
+## Developer docs
 - [Redux State & state transitions](wiki/state.md)
-- [Actions, Selectors & Saga flow](wiki/redux.md)

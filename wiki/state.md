@@ -129,11 +129,11 @@ Behaviors:
 
   - Stores query into state with `status:'PENDINIG`.
 
-- On `FIRESTORE_REDUX_UPDATE_QUERY`,
+- On `FIRESTORE_REDUX_LOAD_NEXT_PAGE`,
 
   - Sets `status:PENDING` & clears `error`.
 
-- On `FIRESTORE_REDUX_RESTART_QUERY`,
+- On `FIRESTORE_REDUX_RETRY_QUERY`,
 
   - Sets `status:PENDING` & cleares`error`.
 
@@ -152,12 +152,12 @@ Behaviors:
 
 - On `FIRESTORE_REDUX_SAVE`,
 
-  - When `target` is `LOCAL` or `BOTH`, saves documents in local state.
+  - When `localWrite` option is `true`, saves documents in local state.
 
 - On `FIRESTORE_REDUX_SAVE_FAILED`, resets documents to their previous value if `prevDocs` provided.
 
 - On `FIRESTORE_REDUX_DELETE_DOCS`,
 
-  - When target is `LOCAL` or `BOTH`, deletes documents from state.
+  - When `localWrite` option is `true`, deletes documents from state.
 
 - On `FIRESTORE_REDUX_DELETE_DOCS_FAILED`, resets documents to their previous value.
