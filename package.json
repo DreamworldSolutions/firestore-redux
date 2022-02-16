@@ -2,7 +2,7 @@
   "name": "@dreamworld/firestore-redux",
   "version": "0.0.0-development",
   "description": "Library which sync cloud firestore data with redux state.",
-  "main": "index.js",
+  "main": "src/firestore-redux.js",
   "type": "module",
   "scripts": {
     "start": "wds"
@@ -22,8 +22,6 @@
     "firebase": "^9.6.6",
     "lodash-es": "^4.17.21",
     "redux": "^4.1.2",
-    "redux-saga": "^1.1.3",
-    "redux-thunk": "^2.4.1",
     "reselect": "^4.1.5",
     "uuid": "^8.3.2"
   },

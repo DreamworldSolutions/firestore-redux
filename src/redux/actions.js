@@ -1,7 +1,7 @@
 import { getFirestore } from "firebase/firestore";
 import firestoreReducer from "./reducers";
 import saga from "./saga";
-import * as utils from "./utils";
+import * as utils from "../utils";
 import { v4 as uuidv4 } from "uuid";
 import isEmpty from "lodash-es/isEmpty";
 import get from "lodash-es/get";
@@ -11,8 +11,8 @@ let DB;
 
 export const INIT = "FIRESTORE_REDUX_INIT";
 export const QUERY = "FIRESTORE_REDUX_QUERY";
-export const RESTART_QUERY = "FIRESTORE_REDUX_RESTART_QUERY";
-export const UPDATE_QUERY = "FIRESTORE_REDUX_UPDATE_QUERY";
+export const RETRY_QUERY = "FIRESTORE_REDUX_RETRY_QUERY";
+export const LOAD_NEXT_PAGE = "FIRESTORE_REDUX_LOAD_NEXT_PAGE";
 export const QUERY_SNAPSHOT = "FIRESTORE_REDUX_QUERY_SNAPSHOT";
 export const QUERY_FAILED = "FIRESTORE_REEUX_QUERY_FAILED";
 export const CANCEL_QUERY = "FIRESTORE_REDUX_CANCEL_QUERY";
@@ -39,7 +39,7 @@ export const init = (store, sagaMiddleware, firebaseApp) => {
 
   store.addReducers({ firestore: firestoreReducer });
   sagaMiddleware.run(saga);
-  utils.setStore(store);
+
   const db = getFirestore(firebaseApp);
   DB = db;
 
@@ -56,7 +56,7 @@ export const init = (store, sagaMiddleware, firebaseApp) => {
  * @param {Object} param0
  *  @property {String} id Query Id. It is optional. But if its provided, it must be unique id.
  *  @property {String} requesterId Requester Id.
- *  @property {String} collection Collection Id. Id of the collection. It is mandatory.
+ *  @property {String} collection Collection / Subcollection path. It is mandatory.
  *  @property {Array} where List of where conditions. It is optional. e.g. [['firstName', '==', 'Nirmal'], ['lastName', '==', 'Baldaniya']]
  *  @property {Array} orderBy List of orderBy fields. It is optional. e.g. [['firstName'], ['age', 'desc']]
  *  @property {Any} startAt The field values to start this query at, in order of the query's order by. It is optional.
@@ -132,7 +132,7 @@ export const updateQuery =
       throw `firestore-redux: updateQuery => No LIVE query exists with ${id} ID.`;
     }
     dispatch({
-      type: UPDATE_QUERY,
+      type: LOAD_NEXT_PAGE,
       id,
       limit,
     });
@@ -148,7 +148,7 @@ export const restartQuery = (id) => (dispatch, getState) => {
     throw `firestore-redux: restartQuery => No CLOSED or FAILED query exists with ${id} ID.`;
   }
   dispatch({
-    type: RESTART_QUERY,
+    type: RETRY_QUERY,
     id,
   });
 };
@@ -234,13 +234,6 @@ export const save =
       throw `firestore-redux: save => Please provide valid documents path / value map.`;
     }
 
-    // Throws error if 1 of the path is invalid.
-    forEach(docs, (doc, path) => {
-      if (!utils.isValidDocPath(path)) {
-        throw `firestore-redux: save => "${path}" is invalid document path. Please provide valid document paths. e.g. "users/$userId"`;
-      }
-    });
-
     const prevState = getState();
     dispatch({
       type: SAVE,
@@ -293,13 +286,6 @@ export const deleteDocs =
     if (!Array.isArray(paths)) {
       throw `firestore-redux: deleteDocs => Please provide valid document paths array.`;
     }
-
-    // Throws error if 1 of the path is invalid.
-    forEach(paths, (path) => {
-      if (!utils.isValidDocPath(path)) {
-        throw `firestore-redux: deleteDocs => "${path}" is invalid document path. Please provide valid document paths. e.g. "users/$userId"`;
-      }
-    });
 
     const prevState = getState();
     dispatch({
