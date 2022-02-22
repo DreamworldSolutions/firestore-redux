@@ -133,3 +133,4 @@ So wait on it only when you want to wait for the remote changes because document
 
 ## Developer docs
 - [Redux State & state transitions](wiki/state.md)
+- [Firestore Observations](wiki/firestore-observations.md)

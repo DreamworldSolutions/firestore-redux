@@ -43,7 +43,7 @@ Reads data from the firestore for given collection/subcollection based on given 
 
 ##### Arguments
 
-- `collection (String)` Collection or subcollection path. It is mandatory.
+- `collection (String)` Collection or subcollection ID. It cannot contain a slash. It is mandatory.
 - `queryCriteria (Object)`: Optional. If not provided, reads all documents of given collection/subcollection.
 
   - `requesterId (String)` Requester Id.
