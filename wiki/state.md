@@ -34,6 +34,7 @@
 | status      | [QueryStatus](#enums)         |
 | once        | Boolean                       | `true` when query is not realtime.                                                                                                                                                                                                                      |
 
+
 Behaviors:
 
 - Once Query is created, it's never removed (even when closed, failed). This is intentionally planned, because it's possible that the same
@@ -61,6 +62,7 @@ Behaviors:
 | endBefore  | Any       | The field values to end this query before, in order of the query's order by.                                                                                                                                                   |
 | limit      | Number    | The maximum number of items to return.                                                                                                                                                                                         |
 | once       | Boolean   | When `true`, request for given path wouldn't be subscribed for live listening.                                                                                                                                                 |
+| waitTillSucceed | Boolean | When it's `true`, result promise will resolved when result is found from firestore. Default is `false`.
 
 #### QueryError
 
@@ -128,14 +130,6 @@ Behaviors:
 - On `FIRESTORE_REDUX_QUERY `,
 
   - Stores query into state with `status:'PENDINIG`.
-
-- On `FIRESTORE_REDUX_LOAD_NEXT_PAGE`,
-
-  - Sets `status:PENDING` & clears `error`.
-
-- On `FIRESTORE_REDUX_RETRY_QUERY`,
-
-  - Sets `status:PENDING` & cleares`error`.
 
 - On `FIRESTORE_REDUX_QUERY_SNAPSHOT`,
 

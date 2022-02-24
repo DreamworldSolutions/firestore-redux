@@ -1,6 +1,5 @@
 class DeleteDocs {
   constructor(store) {
-    super();
     /**
      * A redux store which holds the whole state tree of firestore.
      */
@@ -14,7 +13,7 @@ class DeleteDocs {
    *    - On success, resolves promise.
    *    - On failure, rejects promise & dispatches `FIRESTORE_REDUX_SAVE_FAILED` action with `prevDocs`
    * @param {String} collection Collection/Subcollection path.
-   * @param {Array} docIds Document Ids.
+   * @param {String|Array} docIds Single document Id or list of document Ids.
    * @param {Object} options Delete options. e.g. `{ localWrite: true, remoteWrite: true }`
    * @returns {Promise} Promise resolved when deleted from firestore, rejected when delete fails.
    */

@@ -1,6 +1,5 @@
 const INITIAL_STATE = {};
 import * as actions from "./actions";
-import * as selectors from "./selectors";
 import isEmpty from "lodash-es/isEmpty";
 import get from "lodash-es/get";
 import forEach from "lodash-es/forEach";
@@ -16,9 +15,10 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
     case actions.QUERY:
       return ReduxUtils.replace(oState, `queries.${action.id}`, {
         id: action.id,
-        requesterId: action.requesterId,
         collection: action.collection,
+        requesterId: action.requesterId,
         request: {
+          documentId: action.documentId,
           where: action.where,
           orderBy: action.orderBy,
           startAt: action.startAt,
@@ -26,41 +26,11 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
           endAt: action.endAt,
           endBefore: action.endBefore,
           limit: action.limit,
+          waitTillSucceed: action.waitTillSucceed,
         },
         status: "PENDING",
         once: action.once,
       });
-
-    case actions.LOAD_NEXT_PAGE:
-      oState = ReduxUtils.replace(
-        oState,
-        `queries.${action.id}.status`,
-        "PENDING"
-      );
-      oState = ReduxUtils.replace(
-        oState,
-        `queries.${action.id}.request.limit`,
-        action.limit
-      );
-      oState = ReduxUtils.replace(
-        oState,
-        `queries.${action.id}.error`,
-        undefined
-      );
-      return oState;
-
-    case actions.RETRY_QUERY:
-      oState = ReduxUtils.replace(
-        oState,
-        `queries.${action.id}.status`,
-        "PENDING"
-      );
-      oState = ReduxUtils.replace(
-        oState,
-        `queries.${action.id}.error`,
-        undefined
-      );
-      return oState;
 
     case actions.QUERY_SNAPSHOT:
       // Updates query status to LIVE or CLOSED.
@@ -130,13 +100,15 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       }
 
       if (action.requesterId) {
-        const liveQueries = selectors.liveQueriesByRequester(
-          get(oState, "queries"),
-          action.requesterId
+        forEach(
+          get(oState, `queries`),
+          (query, id) => {
+            if((query.status === "LIVE" || query.status === "PENDING") &&
+            query.requesterId === requesterId) {
+              oState = ReduxUtils.replace(oState, `queries.${id}.status`, "CLOSED");
+            }
+          }
         );
-        forEach(liveQueries, (id) => {
-          oState = ReduxUtils.replace(oState, `queries.${id}.status`, "CLOSED");
-        });
       }
       return oState;
 
@@ -147,7 +119,9 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
           const pathSegments = path.split("/");
           const collection = pathSegments[pathSegments.length - 2];
           const docId = pathSegments[pathSegments.length - 1];
-          const currDoc = cloneDeep(get(state, `docs.${collection}.${docId}`, {}));
+          const currDoc = cloneDeep(
+            get(state, `docs.${collection}.${docId}`, {})
+          );
           doc._syncPending = true;
           doc = merge(currDoc, doc);
           oState = ReduxUtils.replace(

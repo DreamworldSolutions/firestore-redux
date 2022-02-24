@@ -20,8 +20,9 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     css`
       /* START: Common styles */
       :host {
-        display: block;
-        padding: 24px 16px;
+        display: grid;
+        place-items: center;
+        padding: 8px;
       }
 
       h1,
@@ -35,15 +36,14 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
 
       .card {
         box-shadow: var(--mdc-elevation--z3);
-        padding: 24px;
+        padding: 16px;
+        margin: 8px;
         border-radius: 8px;
         display: flex;
         flex-direction: column;
-        margin: 0px auto;
-      }
-
-      .firebase-init-container {
-        max-width: 550px;
+        max-width: calc(100vw - 32px);
+        box-sizing: border-box;
+        flex: 1;
       }
 
       h5 {
@@ -52,7 +52,6 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
 
       h6 {
         ${unsafeCSS(typographyLiterals.headline6)};
-        margin-top: 16px;
       }
 
       pre {
@@ -67,7 +66,6 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
         border: 2px solid lightgray;
         border-radius: 8px;
         --dw-textarea-padding: 8px;
-        margin-top: 16px;
       }
 
       dw-button {
@@ -75,48 +73,20 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
         margin-top: 16px;
       }
 
-      .request-query_container dw-button,
-      .cancel-query_container dw-button,
-      .save-docs_container dw-button {
-        margin-top: 8px;
+      .request-query_container {
+        width: 100%;
       }
       /* END: Common styles.  */
-
-      .request-query_container,
-      .cancel-query_container,
-      .save-docs_container {
-        padding: 8px 8px 24px 8px;
-      }
 
       .row {
         display: flex;
         justify-content: justify;
         flex-wrap: wrap;
-      }
-
-      .request-query_container h6,
-      .cancel-query_container h6,
-      .save-docs_container h6 {
-        margin-left: 12px;
-      }
-
-      .cancel-query_container,
-      .save-docs_container {
-        flex: 1;
-      }
-
-      .cancel-query_container:nth-child(1),
-      .save-docs_container:nth-child(1) {
-        margin: 24px 12px 0 0;
-      }
-
-      .cancel-query_container:nth-child(2),
-      .save-docs_container:nth-child(2) {
-        margin: 24px 0 0 12px;
+        width: 100%;
       }
 
       dw-input {
-        min-width: 500px;
+        min-width: 350px;
         margin: 12px;
         flex: 1;
       }
@@ -135,17 +105,6 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
 
       dw-radio-button {
         margin-left: 8px;
-      }
-
-      @media (max-width: 900px) {
-        dw-input {
-          min-width: 316px;
-        }
-
-        .cancel-query_container,
-        .save-docs_container {
-          margin: 24px 0 0 0 !important;
-        }
       }
     `,
   ];
@@ -174,10 +133,11 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
 
   constructor() {
     super();
+    this._queryCollection = "alphabets";
+    this._singleDocCollection = "alphabets";
     this._query = {
       requesterId: "req-id",
-      collection: "restaurants",
-      orderBy: '[["price", "asc"]]',
+      orderBy: '[["name", "asc"]]',
     };
     this._saveTarget = "BOTH";
   }
@@ -197,8 +157,8 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     }
 
     return html`
-      ${this._requestQueryTemplate} ${this._cancelQueryTemplate}
-      ${this._saveDeleteTemplate}
+      ${this._readByQueryTemplate} ${this._readByDocTemplate}
+      ${this._cancelQueryTemplate} ${this._saveDeleteTemplate}
     `;
   }
 
@@ -229,37 +189,28 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     `;
   }
 
-  get _requestQueryTemplate() {
+  get _readByQueryTemplate() {
     return html`
       <div class="request-query_container card">
-        <h6 class="headline6">Enter Query Details</h6>
+        <h6 class="headline6">Read documents by Query</h6>
         <div class="row">
+          <dw-input
+            dense
+            label="Collection"
+            value="${this._queryCollection}"
+            required
+            placeholder="Enter Collection/Subcollection ID"
+            @value-changed=${(e) => {
+              this._queryCollection = e.detail.value;
+            }}
+          ></dw-input>
           <dw-input
             dense
             label="Requester Id"
             value="${this._query.requesterId}"
-            required
             placeholder="Enter Requester Id"
             @value-changed=${(e) => {
               this._query.requesterId = e.detail.value;
-            }}
-          ></dw-input>
-          <dw-input
-            dense
-            label="Query Id"
-            placeholder="Enter unique Query Id. It is optional. But if you provide, it must be unique."
-            @value-changed=${(e) => {
-              this._query.id = e.detail.value;
-            }}
-          ></dw-input>
-          <dw-input
-            dense
-            label="Collection"
-            value="${this._query.collection}"
-            required
-            placeholder="Enter Collection/Subcollection path"
-            @value-changed=${(e) => {
-              this._query.collection = e.detail.value;
             }}
           ></dw-input>
           <dw-input
@@ -341,6 +292,55 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
         <dw-button raised @click=${this.__requestQuery}
           >Request Query</dw-button
         >
+      </div>
+    `;
+  }
+
+  get _readByDocTemplate() {
+    return html`
+      <div class="request-query_container card">
+        <h6 class="headline6">Read Single Document.</h6>
+        <div class="row">
+          <dw-input
+            dense
+            label="Collection"
+            value="${this._singleDocCollection}"
+            required
+            placeholder="Enter Collection/Subcollection path"
+            @value-changed=${(e) => {
+              this._singleDocCollection = e.detail.value;
+            }}
+          ></dw-input>
+          <dw-input
+            dense
+            label="Document Id"
+            value=""
+            required
+            placeholder="Enter Document ID."
+            @value-changed=${(e) => {
+              this._singleDocId = e.detail.value;
+            }}
+          ></dw-input>
+          <dw-input
+            dense
+            label="Requester Id"
+            value=""
+            placeholder="Enter Requester Id"
+            @value-changed=${(e) => {
+              this._singleDocRequester = e.detail.value;
+            }}
+          ></dw-input>
+        </div>
+
+        <div class="switch-container row">
+          <strong>Once</strong>:
+          <dw-switch
+            @change=${(e) => {
+              this._singleDocOnce = e.target.checked;
+            }}
+          ></dw-switch>
+        </div>
+        <dw-button raised @click=${this._readDoc}>Read Document</dw-button>
       </div>
     `;
   }
@@ -446,15 +446,15 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     try {
       this._firebaseConfig = JSON.parse(this._firebaseConfigString);
       this._firebaseApp = initializeApp(this._firebaseConfig);
-      firestoreRedux.init(store, this._firebaseApp);
+      firestoreRedux.init({ store, firebaseApp: this._firebaseApp, waitTillReadSucceedConfig: { timeout: 20000, maxAttempts: 20 } });
     } catch (err) {
       console.error(err);
       alert("Something is wrong. Please see the error detail in console.");
     }
   }
 
-  __requestQuery() {
-    if (isEmpty(this._query) || !this._query.collection) {
+  async __requestQuery() {
+    if (!this._queryCollection) {
       alert("Please provide Mandatory fields.");
       return;
     }
@@ -473,7 +473,31 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     query.where = this._query.where && JSON.parse(this._query.where);
     query.orderBy = this._query.orderBy && JSON.parse(this._query.orderBy);
 
-    firestoreRedux.query(query);
+    try {
+      const q = firestoreRedux.query(this._queryCollection, query);
+      const result = await q.result;
+      console.log({ result });
+      setTimeout(() => {
+        q.loadNextPage();
+      }, 5000)
+    } catch (error) {
+      console.error("Catch error", error);
+    }
+  }
+
+  async _readDoc() {
+    if (!this._singleDocCollection || !this._singleDocId) {
+      alert("Please provide Mandatory fields.");
+      return;
+    }
+
+    const req = firestoreRedux.getDocById(this._singleDocCollection, this._singleDocId, {
+      once: this._singleDocOnce,
+      requesterId: this._singleDocRequester,
+    });
+    const result = await req.result;
+
+    console.log({ result });
   }
 
   __cancelQuery() {
@@ -481,7 +505,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
       alert("Please enter queryId");
       return;
     }
-    firestoreRedux.cancelQuery({ id: this._cancelQueryId });
+    firestoreRedux.cancelQuery(this._cancelQueryId);
   }
 
   __cancelQueryByRequester() {
@@ -489,9 +513,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
       alert("Please enter requesterId");
       return;
     }
-    firestoreRedux.actions.cancelQuery({
-      requesterId: this._cancelRequesterId,
-    });
+    firestoreRedux.actions.cancelQuery(this._cancelRequesterId);
   }
 
   __saveDocs() {

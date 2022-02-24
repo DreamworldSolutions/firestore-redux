@@ -3,6 +3,7 @@
 An offline-first + real-time database using Firestore + Redux.
 
 ## Basic Usage
+
 > This guide is just for basic use-cases. For more details about all methods & selectors, [See Reference Guide](./wiki/user-reference-guide.md)
 
 ### Initialization
@@ -11,10 +12,10 @@ An offline-first + real-time database using Firestore + Redux.
 import { initializeApp } from "firebase/app";
 import firestoreRedux from "@dreamworld/firestore-redux";
 import { store } from "./store.js"; // This is store.js PATH of your application where store is created using `createStore` So replace it if required.
-const firebaseConfig = {} // Firebase Configurations.
-
+const firebaseConfig = {}; /* Firebase Configurations. e.g. { "apiKey": "AIzaSyAD9RzBEZ_pzZomgIbyIHo0No4PoFDm2Zc", "authDomain": "friendlyeats-d6aa1.firebaseapp.com", "projectId": "friendlyeats-d6aa1" } */
+const waitTillReadSucceedConfig = { timeout: 30000 , maxAttempts: 20 }; // timeout is in milliseconds.
 const firebaseApp = initializeApp(firebaseConfig);
-firestoreRedux.init(store, firebaseApp);
+firestoreRedux.init({ store, firebaseApp, waitTillReadSucceedConfig });
 ```
 
 ### Read documents by query criteria.
@@ -23,114 +24,149 @@ firestoreRedux.init(store, firebaseApp);
 import firestoreRedux from "@dreamworld/firestore-redux";
 
 // Realtime query
-const queryRef = firestoreRedux.query(collection, queryCriteria);
+const query = firestoreRedux.query(collection, queryCriteria);
 
 // 1 time query.
-const queryRef = firestoreRedux.query(collection, {once: true});
+const query = firestoreRedux.query(collection, { once: true });
 
-// Get Query Id from queryRef.
-const queryId = queryRef.id;
+// Get Query Id from query.
+const queryId = query.id;
 
-// Wait till query response.
-const response = await queryRef.response(); // Resolved when query succeed or failed.
-const result = response.result; // Query result. e.g. [$queryId1, $queryId2, $queryId3, ...]
-const error = response.error; // Query error. e.g. {code, message}
+// Get result when first snapshot of result is retrived.
+try {
+  const result = await query.result; // [{id, ...}, {id, ...}, ...]
+} catch (error) {
+  const errorCode = error.code;
+  const errorMessage = error.message;
+  // Retry failed query.
+  query.retry();
+}
 
-// Retry failed query.
-queryRef.retry();
+// Wait till query succeed.
+try {
+  const query = firestoreRedux.query(collection, {
+    once: true,
+    waitTillSucceed: true,
+  }); // Retries query for 10 seconds till it succeed.
+  const result = await query.result;
+} catch (error) {
+  // Fails if failed after given wait timeout.
+}
+
+// Result can be retrieved from the redux state directly through selector factory.
+const docsByQuerySelector =
+  firestoreRedux.selectors.docsByQueryFactory(queryId, collection);
+const docs = docsByQuerySelector(state); // [{id, ...}, {id, ...}, ...]
+
+// Get all documents for given collection.
+const allDocsSelector = firestoreRedux.selectors.allDocsFactory(collection);
+const allDocs = allDocsSelector(state); // [{id, ...}, {id, ...}, ...]
 ```
 
 ### Read document by it's ID.
+
 ```javascript
 import firestoreRedux from "@dreamworld/firestore-redux";
 
 // Realtime query.
-const queryRef = firestoreRedux.getDocById(collection, documentId, {requesterId});
+const request = firestoreRedux.getDocById(collection, documentId, {
+  requesterId,
+});
 
 // 1 time query.
-const queryRef = firestoreRedux.getDocById(collection, documentId, {once: true});
+const request = firestoreRedux.getDocById(collection, documentId, {
+  once: true,
+});
 
 // Get Query Id.
-const id = queryRef.id;
+const id = request.id;
 
 // Wait till response of the request.
-const response = await queryRef.response(); // Resolved when query succeed or failed.
-const result = response.result; // Query result. e.g. [$queryId1, $queryId2, $queryId3, ...]
-const error = response.error; // Query error. e.g. {code, message}
+try {
+  const doc = await request.result; // Document itself. e.g.  {id, ...}
+} catch (error) {
+  const errorCode = error.code;
+  const errorMessage = error.message;
+  // Retry failed query.
+  request.retry();
+}
 
-// Retry failed query.
-queryRef.retry();
+// Wait till result found.
+try {
+  const request = firestoreRedux.getDocById(collection, {
+    once: true,
+    waitTillSucceed: true,
+  }); // Retries read for 10 seconds till document found.
+  const result = await request.result;
+} catch (error) {
+  // Fails if read failed after given wait timeout.
+}
 
+// Document can be retrieved from redux state directly through selector.
+const doc = firestoreRedux.selectors.doc(state, collection, docId); // {id, ...}
 ```
 
 ### Cancel / Stop queries
+
 ```javascript
 import firestoreRedux from "@dreamworld/firestore-redux";
 
-// Cancel by queryRef.
-queryRef.cancel();
+// Cancel by query.
+query.cancel();
 
 // Cancel by query Id.
-firestoreRedux.cancelQuery({id});
+firestoreRedux.cancelQuery(id);
 
-// Cance by requester Id.
-firestoreRedux.cancelQuery({requesterId});
-
+// Cancel by requester Id.
+firestoreRedux.cancelQueryByRequester(requesterId);
 ```
 
 ### Load Next Page documents.
+
 > This will work only when `limit` query criteria is given & query is realtime.
+
 ```javascript
 import firestoreRedux from "@dreamworld/firestore-redux";
 
-const queryRef = firestoreRedux.query(collection, {limit: 50}); // This will load 50 documents.
-queryRef.loadNextPage(); // This will load 100 documents.
-```
-
-### Get Documents from Redux State  using Selectors.
-```javascript
-
-// Get list of documents which are in result of the query.
-const docs = firestoreRedux.selectors.docsByQueryId(state, collection, queryId); // [{id, ...}, {id, ...}, ...]
-
-// Get all documents for given collection.
-const docs = firestoreRedux.selectors.docs(state, collection); // [{id, ...}, {id, ...}, ...]
-
-// Get single document by it's ID.
-const doc = firestoreRedux.selectors.doc(state, collection, docId); // {id, ...}
+const query = firestoreRedux.query(collection, { limit: 50 }); // This will load 1-50 documents.
+query.loadNextPage(); // This will load 1-100 documents.
 ```
 
 ### Save documents.
 
 ```JS
 // Save documents on local + remote both.
-const response = firestoreRedux.save(collection, docs);
+firestoreRedux.save(collection, docs);
 
 // Save documents only in redux state.
 firestoreRedux.save(collection, docs, { localWrite: true, remoteWrite: false });
 
 // Save documents only on remote.
-const response = firestoreRedux.save(collection, docs, { localWrite: false, remoteWrite: true });
+firestoreRedux.save(collection, docs, { localWrite: false, remoteWrite: true });
+
+// Wait till remote changes.
+await firestoreRedux.save(collection, docs);
+// Do further work...
 ```
-> `response` in the above example is a `Promise` which will be resolved when the documents are saved successfully on remote. It will be resolved on failed write operation.
-So wait on it only when you want to wait for the remote changes because documents are saved in redux state already.
 
 ### Delete documents.
 
 ```JS
 // Delete documents from local + remote both.
-const response = firestoreRedux.delete(collection, docIds);
+firestoreRedux.delete(collection, docIds);
 
 // Delete documents from local only.
 firestoreRedux.delete(collection, docIds, {localWrite: true, remoteWrite: false });
 
 // Delete documents from remote only.
-const response = firestoreRedux.delete(collection, docIds, { remoteWrite: true, localWrite: false });
-```
-> `response` in the above example is a `Promise` which will be resolved when the documents are deleted successfully from remote. It will be resolved on failed write operation.
-So wait on it only when you want to wait for the remote changes because documents are deleted from redux state already.
+firestoreRedux.delete(collection, docIds, { remoteWrite: true, localWrite: false });
 
+// Wait till remote changes.
+await firestoreRedux.delete(collection, docIds);
+// Do further work...
+```
 
 ## Developer docs
+
 - [Redux State & state transitions](wiki/state.md)
 - [Firestore Observations](wiki/firestore-observations.md)

@@ -14,6 +14,7 @@ firestoreRedux.init(store, firebaseApp);
 
 - `store (Object)` Redux Store. It is mandatory.
 - `firebaseApp (Object)` Firebase app. It is optional.
+- `waitTillReadSucceedConfig` Configurations for waiting query. This is ignored when `waitTillSucceed` query criteria is not `true`. Default is `{ timeout: 30000, maxAttempts: 30 }`. 
 
 ##### returns
 
@@ -24,7 +25,7 @@ firestoreRedux.init(store, firebaseApp);
 Reads data from the firestore for given collection/subcollection based on given query criteria.
 
 ```js
-  const queryRef = firestoreRedux.query(
+  const query = firestoreRedux.query(
     collection
     {
       requesterId,
@@ -37,6 +38,7 @@ Reads data from the firestore for given collection/subcollection based on given 
       endBefore,
       limit,
       once,
+      waitTillSucceed
     }
   );
 ```
@@ -55,16 +57,21 @@ Reads data from the firestore for given collection/subcollection based on given 
   - `endBefore (Any)` The field values to end this query before, in order of the query's order by.
   - `limit (Number)` The maximum number of items in result.
   - `once (Boolean)` When `true`, does not subscribe for realtime changes. Default is `false`.
+  - `waitTillSucceed (Boolean)` When it's `true`, retries query based on `waitTillReadSucceedConfig`. Default is `false`.
 
 ##### returns
 
-- `(Object)` `queryRef` which is instance of the `Query` class.
-  - Later on it can be used to cancel query, load next page, or wait till query succeeds or failed.
+- `(Object)` `query` which is instance of the `Query` class.
+  - Later on it can be used to cancel query, load next page, or retry failed.
     ```JS
-    const queryId = queryRef.queryId; // Get query Id.
-    queryRef.cancel(); // Cancel query.
-    queryRef.loadNextPage(); // Load next page.
-    const response = await queryRef.response(); // Resolved when query succeed or failed.
+    const queryId = query.id; // Get query Id.
+    query.cancel(); // Cancel query.
+    query.loadNextPage(); // Load next page.
+    try {
+      const docs = await query.result; // Resolved when first snapshot is retrived.
+    } catch(error){
+      query.retry();
+    }
     ```
 
 ### `firestoreRedux.getDocById`
@@ -72,42 +79,59 @@ Reads data from the firestore for given collection/subcollection based on given 
 Reads single document from firestore by document ID.
 
 ```javascript
-const queryRef = firestoreRedux.getDocById(collection, docId, { requesterId });
+const query = firestoreRedux.getDocById(collection, docId, { requesterId });
 ```
 
 ##### Arguments
 
-- `collection (String)` Collection or subcollection path. e.g. `users` or `boards/$boardId/cards`.
+- `collectionPath (String)` Collection or subcollection path. e.g. `users` or `boards/$boardId/cards`.
 - `docId (String)` Document ID.
 - `options (Object)` Options
   - `requesterId (String)` Requester Id.
   - `once (Boolean)` `true` When query is not realtime.
+  - `waitTillSucceed (Boolean)` When it's `true`, retries query based on `waitTillReadSucceedConfig`.
 
 ##### returns
 
-- `(Object)` `queryRef` which is instance of the `GetDocById` class.
+- `(Object)` `request` which is instance of the `GetDocById` class.
   - Later on it can be used to cancel query or wait till query succeeds or failed.
     ```JS
-    const queryId = queryRef.queryId; // Get query Id.
-    queryRef.cancel(); // Cancel query.
-    const response = await queryRef.response(); // Resolved when query succeed or failed.
+    const queryId = request.id; // Get query Id.
+    request.cancel(); // Cancel query.
+    try {
+      const doc= await request.result; // Resolved when first snapshot is retrived.
+    } catch(error){
+      query.retry();
+    }
     ```
 
 ### `firestoreRedux.cancelQuery`
 
-Cancels live query/queries by it's id or requester id.
+Cancels live query by it's id.
 
 ```JS
-firestoreRedux.cancelQuery({id, requesterId});
+firestoreRedux.cancelQuery(id);
 ```
 
 ##### Arguments
 
-> 1 of the following properties must be given. Either `id` or `requesterId`.
+- `id (String)` Query Id. It is mandatory.
 
-- `params (Object)`
-  - `id (String)` Query Id.
-  - `requesterId` (String) Requester Id.
+##### returns
+
+- Nothing
+
+### `firestoreRedux.cancelQueryByRequester`
+
+Cancels live queries by requester Id.
+
+```JS
+firestoreRedux.cancelQueryByRequester(requesterId);
+```
+
+##### Arguments
+
+- `requesterId` (String) Requester Id. It is mandatory.
 
 ##### returns
 
@@ -124,7 +148,7 @@ firestoreRedux.save(collection, docs, options);
 ##### Arguments
 
 - `collection (String)` Collection / Subcollection path. if it's subcollection, it's `/` sepereted path upto subcollection. e.g. `boards/$boardId/cards`
-- `docs (Array)` List of documents to be saved or updated.
+- `docs (Object|Array)` Single document or List of documents to be saved or updated.
 - `options (Object)`. Save options. e.g. `{ localWrite: true, remoteWrite: true }` By default `localWrite` & `remoteWrite` both are `true`.
 
 ##### returns
@@ -142,7 +166,7 @@ firestoreRedux.delete(collection, docIds, options);
 ##### Arguments
 
 - `collection (String)` Collection / Subcollection path.
-- `docIds (Array)` List of document Ids.
+- `docIds (String|Array)` Single doc Id or List of document Ids.
 - `options (Object)`. Save options. e.g. `{ localWrite: true, remoteWrite: true }` By default `localWrite` & `remoteWrite` both are `true`.
 
 ##### returns
@@ -169,36 +193,34 @@ const doc = firestoreRedux.selectors.doc(state, collection, docId);
 
 - `(Object)` e.g. `{ id, firstName, lastName, profilePic }`
 
-### `firestoreRedux.selectors.docs`
+### `firestoreRedux.selectors.allDocsFactory`
 
 Gets all documents of the given collection ID.
 
 ```JS
-const docs = firestoreRedux.selectors.docs(state, collection);
+const docs = firestoreRedux.selectors.allDocsFactory(collection)(state);
 ```
 
 ##### Arguments
 
-- `state (Object)` Redux state.
 - `collection (String)` Collection ID.
 
 ##### returns
 
 - `(Array)` e.g. `[ { id, firstName, lastName, profilePic },{ id, firstName, lastName, profilePic }, ... ]`
 
-### `firestoreRedux.selectors.docsByQueryId`
+### `firestoreRedux.selectors.docsByQueryFactory`
 
 Gets documents of given collection, based the query result of given queryId.
 
 ```JS
-const docs = firestoreRedux.selectors.docsByQueryId(state, collection, queryId);
+const docs = firestoreRedux.selectors.docsByQueryFactory(queryId, collection)(state);
 ```
 
 ##### Arguments
 
-- `state (Object)` Redux state.
-- `collection (String)` Collection ID.
 - `queryId (String)` Query ID, from whose documents will be returned.
+- `collection (String)` Collection ID.
 
 ##### returns
 

@@ -1,6 +1,8 @@
 import get from "lodash-es/get";
 import values from "lodash-es/values";
 import filter from "lodash-es/filter";
+import forEach from "lodash-es/forEach";
+import { createSelector } from "reselect";
 
 /**
  * @param {Object} state Redux State.
@@ -11,22 +13,47 @@ import filter from "lodash-es/filter";
 export const doc = (state, collection, docId) =>
   get(state, `firestore.docs.${collection}.${docId}`);
 
+let allDocsFactoryCache = {};
 /**
- * @param {Object} state Redux State.
  * @param {String} collection Collection Id
- * @returns {Array} All documents for given collection Id with it's local value.
+ * @returns {Array} All documents of given collection Id.
  */
-export const docs = (state, collection) =>
-  values(get(state, `firestore.docs.${collection}`));
+export const allDocsFactory = (collection) => {
+  if (allDocsFactoryCache[collection]) {
+    return allDocsFactoryCache[collection];
+  }
+  allDocsFactoryCache[collection] = createSelector(
+    (state) => get(state, `firestore.docs.${collection}`),
+    (docs) => {
+      return values(docs);
+    }
+  );
+  return allDocsFactoryCache[collection];
+};
 
+let docsByQueryFactoryCache = {};
 /**
- * @returns {Array} All documents of given queryId & collection id.
+ * @param {String} queryId Query Id
+ * @returns {Array} All documents of given query Id.
  */
-export const docsByQueryId = createSelector(
-  (state, collection, queryId) => query(state, queryId),
-  docs,
-  (query, docs) => {}
-);
+export const docsByQueryFactory = (queryId, collection) => {
+  if (docsByQueryFactoryCache[queryId]) {
+    return docsByQueryFactoryCache[queryId];
+  }
+
+  docsByQueryFactoryCache[queryId] = createSelector(
+    (state) => get(state, `firestore.queries.${queryId}.result`),
+    (state) => get(state, `firestore.docs.${collection}`),
+    (result, allDocs) => {
+      let docs = [];
+      forEach(result, (docId) => {
+        allDocs && docs.push(allDocs[docId]);
+      });
+      return docs;
+    }
+  );
+  return docsByQueryFactoryCache[queryId];
+};
 
 /**
  * @param {Object} state Redux State.
@@ -60,14 +87,19 @@ export const queryResult = (state, id) =>
   get(state, `firestore.queries.${id}.result`, []);
 
 /**
- * @param {Object} queries List of queries e.g. {$queryId1: {id, requesterId, request, result}, $queryId2: {id, requesterId, request, result}}
  * @param {String} requesterId Requester Id
  * @returns {Array} List of LIVE query ids e.g. [$queryId1, queryId2, ...]
  */
-export const liveQueriesByRequester = (queries, requesterId) => {
-  const liveQueries = filter(
-    values(queries),
-    (query) => query.status === "LIVE" && query.requesterId === requesterId
-  );
-  return liveQueries.map(({ id }) => id);
-};
+export const liveQueriesByRequester = createSelector(
+  (state, requesterId) => requesterId,
+  (state) => get(state, `firestore.queries`),
+  (requesterId, queries) => {
+    const liveQueries = filter(
+      values(queries),
+      (query) =>
+        (query.status === "LIVE" || query.status === "PENDING") &&
+        query.requesterId === requesterId
+    );
+    return liveQueries.map(({ id }) => id) || [];
+  }
+);
