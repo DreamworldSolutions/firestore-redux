@@ -1,10 +1,12 @@
 import { v4 as uuidv4 } from "uuid";
-import * as _selectors from "./redux/selectors.js";
+import * as actions from "./redux/actions";
+import * as _selectors from "./redux/selectors";
 import firestoreReducer from "./redux/reducers";
 import { getFirestore } from "firebase/firestore";
 import Query from "./query";
 import GetDocById from "./get-doc-by-id";
 import merge from "lodash-es/merge";
+import forEach from "lodash-es/forEach";
 
 class FirestoreRedux {
   constructor() {
@@ -16,7 +18,7 @@ class FirestoreRedux {
     /**
      * Holds queries. key is the id of the query, and value is it's instance.
      */
-    this.queries = {};
+    this._queries = {};
 
     // Default configuration for wait till read succeed query.
     this._waitTillReadSucceedConfig = { timeout: 30000, maxAttempts: 30 };
@@ -60,8 +62,9 @@ class FirestoreRedux {
 
     const id = uuidv4();
     const instance = new Query(this.store, this.db);
-    this.queries[id] = instance;
+    this._queries[id] = instance;
     instance.query(id, collection, criteria);
+    this._queries[id] = instance;
     return instance;
   }
 
@@ -89,8 +92,9 @@ class FirestoreRedux {
 
     const id = uuidv4();
     const instance = new GetDocById(this.store, this.db);
-    this.queries[id] = instance;
+    this._queries[id] = instance;
     instance.getDoc(id, collectionPath, documentId, options);
+    this._queries[id] = instance;
     return instance;
   }
 
@@ -125,14 +129,40 @@ class FirestoreRedux {
    * @param {String} id Query Id.
    */
   cancelQuery(id) {
-    return;
+    const status = _selectors.queryStatus(this.store.getState(), id);
+    if (!id || !status || (status !== "LIVE" && status !== "PENDING")) {
+      return;
+    }
+    this.store.dispatch(actions.cancelQuery({ id }));
+    this.__cancel(id);
   }
 
   /**
    * Cancels all live queries by requester id.
    * @param {String} requesterId Requester Id.
    */
-  cancelQueryByRequester(requesterId) {}
+  cancelQueryByRequester(requesterId) {
+    const liveQueries = _selectors.liveQueriesByRequester(
+      this.store.getState(),
+      requesterId
+    );
+    forEach(liveQueries, (id) => {
+      this.__cancel(id);
+    });
+    this.store.dispatch(actions.cancelQuery({ requesterId }));
+  }
+
+  /**
+   * Unsubscribes firestore query.
+   * @param {String} id Query Id.
+   * @private
+   */
+  __cancel(id) {
+    if (this._queries[id]) {
+      this._queries[id].cancel();
+      delete this._queries[id];
+    }
+  }
 
   /**
    * @param {String} path Collection/Subcollection path.

@@ -60,12 +60,10 @@ class GetDocById {
   }
 
   /**
-   * Cancels Request.
-   * - Dispatches `CANCEL_QUERY` redux action.
    * - Disconnects firestore request.
    */
   cancel() {
-    return;
+    this.__unsubscribe();
   }
 
   /**
@@ -150,10 +148,7 @@ class GetDocById {
    * @private
    */
   __onRequestFailed(error) {
-    if (this._unsubscribe) {
-      this._unsubscribe();
-      this._unsubscribe = undefined;
-    }
+    this.__unsubscribe();
 
     this.store.dispatch(
       actions._queryFailed({
@@ -162,6 +157,15 @@ class GetDocById {
       })
     );
     this._reject(error);
+  }
+
+  /**
+   * Unsubscribes firestore query.
+   * @private
+   */
+  __unsubscribe() {
+    this._unsubscribe && this._unsubscribe();
+    this._unsubscribe = undefined;
   }
 }
 

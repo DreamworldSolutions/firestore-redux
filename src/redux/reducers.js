@@ -104,7 +104,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
           get(oState, `queries`),
           (query, id) => {
             if((query.status === "LIVE" || query.status === "PENDING") &&
-            query.requesterId === requesterId) {
+            query.requesterId === action.requesterId) {
               oState = ReduxUtils.replace(oState, `queries.${id}.status`, "CLOSED");
             }
           }

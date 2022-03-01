@@ -513,7 +513,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
       alert("Please enter requesterId");
       return;
     }
-    firestoreRedux.actions.cancelQuery(this._cancelRequesterId);
+    firestoreRedux.cancelQueryByRequester(this._cancelRequesterId);
   }
 
   __saveDocs() {

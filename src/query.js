@@ -106,12 +106,10 @@ class Query {
   }
 
   /**
-   * Cancels query.
-   * - Dispatches `CANCEL_QUERY` redux action.
    * - Disconnects firestore query.
    */
   cancel() {
-    return;
+    this.__unsubscribe();
   }
 
   /**
@@ -122,7 +120,7 @@ class Query {
     if (!this._initialQueryLimit) {
       throw "firestore-redux > loadNextPage: Limit criteria is not provided.";
     }
-    this._unsubscribe && this._unsubscribe();
+    this.__unsubscribe();
     this._criteria.limit = this._criteria.limit + this._initialQueryLimit;
     this.query(this.id, this._collection, this._criteria);
   }
@@ -311,10 +309,7 @@ class Query {
    * @private
    */
   __onQueryFailed(error) {
-    if (this._unsubscribe) {
-      this._unsubscribe();
-      this._unsubscribe = undefined;
-    }
+    this.__unsubscribe();
 
     this.store.dispatch(
       actions._queryFailed({
@@ -323,6 +318,15 @@ class Query {
       })
     );
     this._reject(error);
+  }
+
+  /**
+   * Unsubscribes firestore query.
+   * @private
+   */
+  __unsubscribe() {
+    this._unsubscribe && this._unsubscribe();
+    this._unsubscribe = undefined;
   }
 }
 
