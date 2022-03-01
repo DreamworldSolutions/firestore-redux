@@ -446,7 +446,11 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     try {
       this._firebaseConfig = JSON.parse(this._firebaseConfigString);
       this._firebaseApp = initializeApp(this._firebaseConfig);
-      firestoreRedux.init({ store, firebaseApp: this._firebaseApp, waitTillReadSucceedConfig: { timeout: 20000, maxAttempts: 20 } });
+      firestoreRedux.init({
+        store,
+        firebaseApp: this._firebaseApp,
+        waitTillReadSucceedConfig: { timeout: 20000, maxAttempts: 20 },
+      });
     } catch (err) {
       console.error(err);
       alert("Something is wrong. Please see the error detail in console.");
@@ -472,32 +476,39 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     const query = cloneDeep(this._query);
     query.where = this._query.where && JSON.parse(this._query.where);
     query.orderBy = this._query.orderBy && JSON.parse(this._query.orderBy);
-
     try {
-      const q = firestoreRedux.query(this._queryCollection, query);
-      const result = await q.result;
+      window.q = firestoreRedux.query(this._queryCollection, query);
+      const result = await window.q.result;
       console.log({ result });
       setTimeout(() => {
-        q.loadNextPage();
-      }, 5000)
+        window.q.loadNextPage();
+      }, 5000);
     } catch (error) {
-      console.error("Catch error", error);
+      console.log("Catch error", error);
+      window.q.retry();
     }
   }
 
   async _readDoc() {
-    if (!this._singleDocCollection || !this._singleDocId) {
-      alert("Please provide Mandatory fields.");
-      return;
+    try {
+      if (!this._singleDocCollection || !this._singleDocId) {
+        alert("Please provide Mandatory fields.");
+        return;
+      }
+
+      window.req = firestoreRedux.getDocById(
+        this._singleDocCollection,
+        this._singleDocId,
+        {
+          once: this._singleDocOnce,
+          requesterId: this._singleDocRequester,
+        }
+      );
+      const result = await window.req.result;
+      console.log({ result });
+    } catch (error) {
+      window.req.retry();
     }
-
-    const req = firestoreRedux.getDocById(this._singleDocCollection, this._singleDocId, {
-      once: this._singleDocOnce,
-      requesterId: this._singleDocRequester,
-    });
-    const result = await req.result;
-
-    console.log({ result });
   }
 
   __cancelQuery() {

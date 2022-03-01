@@ -127,9 +127,14 @@ class Query {
 
   /**
    * Retries if query is failed.
-   * - Retries query on firestore.
    */
-  retry() {}
+  retry() {
+    const status = selectors.queryStatus(this.store.getState(), this.id);
+    if (status !== "FAILED") {
+      return;
+    }
+    this.query(this.id, this._collection, this._criteria);
+  }
 
   /**
    * Requests one time query to firestore by given query criteria.

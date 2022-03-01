@@ -68,9 +68,14 @@ class GetDocById {
 
   /**
    * Retries if request is failed.
-   * - Retries request on firestore.
    */
-  retry() {}
+  retry() {
+    const status = selectors.queryStatus(this.store.getState(), this.id);
+    if (status !== "FAILED") {
+      return;
+    }
+    this.getDoc(this.id, this._collectionPath, this._documentId, this._options);
+  }
 
   /**
    * Requests one time to firestore for given document.
@@ -111,36 +116,35 @@ class GetDocById {
    *  - On failure, dispatches `QUERY_FAILED` action with error details.
    */
   __getRealTime({ id, collection, pathSegments, documentId }) {
-    try {
-      let resolved;
-      this._unsubscribe = onSnapshot(
-        fsDoc(this.db, ...pathSegments, documentId),
-        (doc) => {
-          const docs = [
-            {
-              id: doc.id,
-              data: doc.data(),
-              newIndex: 0,
-              oldIndex: -1,
-            },
-          ];
-          this.store.dispatch(
-            actions._querySnapShot({ id, collection, docs, status: "LIVE" })
+    let resolved;
+    this._unsubscribe = onSnapshot(
+      fsDoc(this.db, ...pathSegments, documentId),
+      (doc) => {
+        const docs = [
+          {
+            id: doc.id,
+            data: doc.data(),
+            newIndex: 0,
+            oldIndex: -1,
+          },
+        ];
+        this.store.dispatch(
+          actions._querySnapShot({ id, collection, docs, status: "LIVE" })
+        );
+        if (!resolved) {
+          const result = selectors.doc(
+            this.store.getState(),
+            collection,
+            documentId
           );
-          if (!resolved) {
-            const result = selectors.doc(
-              this.store.getState(),
-              collection,
-              documentId
-            );
-            this._resolve(result);
-            resolved = true;
-          }
+          this._resolve(result);
+          resolved = true;
         }
-      );
-    } catch (error) {
-      this.__onRequestFailed(error);
-    }
+      },
+      (error) => {
+        this.__onRequestFailed(error);
+      }
+    );
   }
 
   /**
