@@ -62,6 +62,10 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
         overflow: auto;
       }
 
+      .row strong:not(:nth-child(1)) {
+        margin-left: 32px;
+      }
+
       dw-textarea {
         border: 2px solid lightgray;
         border-radius: 8px;
@@ -288,6 +292,13 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
               this._query.once = e.target.checked;
             }}
           ></dw-switch>
+
+          <strong>Wait Till Read Succeed</strong>:
+          <dw-switch
+            @change=${(e) => {
+              this._query.waitTillSucceed = e.target.checked;
+            }}
+          ></dw-switch>
         </div>
         <dw-button raised @click=${this.__requestQuery}
           >Request Query</dw-button
@@ -337,6 +348,13 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
           <dw-switch
             @change=${(e) => {
               this._singleDocOnce = e.target.checked;
+            }}
+          ></dw-switch>
+
+          <strong>Wait Till Read Succeed</strong>:
+          <dw-switch
+            @change=${(e) => {
+              this._singleDocwaitTillSucceed = e.target.checked;
             }}
           ></dw-switch>
         </div>
@@ -449,7 +467,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
       firestoreRedux.init({
         store,
         firebaseApp: this._firebaseApp,
-        waitTillReadSucceedConfig: { timeout: 20000, maxAttempts: 20 },
+        readPollingConfig: { timeout: 10000, maxAttempts: 20 },
       });
     } catch (err) {
       console.error(err);
@@ -502,6 +520,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
         {
           once: this._singleDocOnce,
           requesterId: this._singleDocRequester,
+          waitTillSucceed: this._singleDocwaitTillSucceed
         }
       );
       const result = await window.req.result;

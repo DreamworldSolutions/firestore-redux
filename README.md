@@ -13,9 +13,9 @@ import { initializeApp } from "firebase/app";
 import firestoreRedux from "@dreamworld/firestore-redux";
 import { store } from "./store.js"; // This is store.js PATH of your application where store is created using `createStore` So replace it if required.
 const firebaseConfig = {}; /* Firebase Configurations. e.g. { "apiKey": "AIzaSyAD9RzBEZ_pzZomgIbyIHo0No4PoFDm2Zc", "authDomain": "friendlyeats-d6aa1.firebaseapp.com", "projectId": "friendlyeats-d6aa1" } */
-const waitTillReadSucceedConfig = { timeout: 30000 , maxAttempts: 20 }; // timeout is in milliseconds.
+const readPollingConfig = { timeout: 30000 , maxAttempts: 30 }; // timeout is in milliseconds.
 const firebaseApp = initializeApp(firebaseConfig);
-firestoreRedux.init({ store, firebaseApp, waitTillReadSucceedConfig });
+firestoreRedux.init({ store, firebaseApp, readPollingConfig });
 ```
 
 ### Read documents by query criteria.

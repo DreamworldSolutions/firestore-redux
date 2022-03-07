@@ -21,24 +21,25 @@ class FirestoreRedux {
     this._queries = {};
 
     // Default configuration for wait till read succeed query.
-    this._waitTillReadSucceedConfig = { timeout: 30000, maxAttempts: 30 };
+    this._readPollingConfig = { timeout: 30000, maxAttempts: 30 };
   }
 
   /**
    * Initialize library. (Sets store property & adds `firestore` reducer)
    * @param {Object} store Redux Store.
    * @param {Object} firebaseApp Firebase app. It's optional.
+   * @param {Object} readPollingConfig. Query polling config.
    */
-  init({ store, firebaseApp, waitTillReadSucceedConfig }) {
+  init({ store, firebaseApp, readPollingConfig }) {
     if (!store) {
       throw "firestore-redux : redux store is not provided.";
     }
     this.store = store;
     store.addReducers({ firestore: firestoreReducer });
     this.db = getFirestore(firebaseApp);
-    this.waitTillReadSucceedConfig = merge(
-      this._waitTillReadSucceedConfig,
-      waitTillReadSucceedConfig
+    this.readPollingConfig = merge(
+      this._readPollingConfig,
+      readPollingConfig
     );
   }
 
@@ -61,7 +62,7 @@ class FirestoreRedux {
     }
 
     const id = uuidv4();
-    const instance = new Query(this.store, this.db);
+    const instance = new Query(this.store, this.db, this.readPollingConfig);
     this._queries[id] = instance;
     instance.query(id, collection, criteria);
     this._queries[id] = instance;
@@ -91,7 +92,7 @@ class FirestoreRedux {
     }
 
     const id = uuidv4();
-    const instance = new GetDocById(this.store, this.db);
+    const instance = new GetDocById(this.store, this.db, this.readPollingConfig);
     this._queries[id] = instance;
     instance.getDoc(id, collectionPath, documentId, options);
     this._queries[id] = instance;

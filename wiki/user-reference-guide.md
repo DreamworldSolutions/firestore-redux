@@ -14,7 +14,7 @@ firestoreRedux.init(store, firebaseApp);
 
 - `store (Object)` Redux Store. It is mandatory.
 - `firebaseApp (Object)` Firebase app. It is optional.
-- `waitTillReadSucceedConfig` Configurations for waiting query. This is ignored when `waitTillSucceed` query criteria is not `true`. Default is `{ timeout: 30000, maxAttempts: 30 }`. 
+- `readPollingConfig` Configurations for waiting query. This is ignored when `waitTillSucceed` query criteria is not `true`. Default is `{ timeout: 30000, maxAttempts: 30 }`. 
 
 ##### returns
 
@@ -57,7 +57,7 @@ Reads data from the firestore for given collection/subcollection based on given 
   - `endBefore (Any)` The field values to end this query before, in order of the query's order by.
   - `limit (Number)` The maximum number of items in result.
   - `once (Boolean)` When `true`, does not subscribe for realtime changes. Default is `false`.
-  - `waitTillSucceed (Boolean)` When it's `true`, retries query based on `waitTillReadSucceedConfig`. Default is `false`.
+  - `waitTillSucceed (Boolean)` When it's `true`, retries query based on `readPollingConfig`. Default is `false`.
 
 ##### returns
 
@@ -89,7 +89,7 @@ const query = firestoreRedux.getDocById(collection, docId, { requesterId });
 - `options (Object)` Options
   - `requesterId (String)` Requester Id.
   - `once (Boolean)` `true` When query is not realtime.
-  - `waitTillSucceed (Boolean)` When it's `true`, retries query based on `waitTillReadSucceedConfig`.
+  - `waitTillSucceed (Boolean)` When it's `true`, retries query based on `readPollingConfig`.
 
 ##### returns
 

@@ -27,7 +27,7 @@ export const DELETE_DOCS_FAILED = "FIRESTORE_REDUX_DELETE_DOCS_FAILED";
  *  @property {Any} endBefore The field values to end this query before, in order of the query's order by. It is optional.
  *  @property {Number} limit The maximum number of items to return. It is optional.
  *  @property {Boolean} once When `true`, does not subscribe for realtime changes. It is optional.
- *  @property {Boolean} waitTillReadSucceed When `true`, retries query until it's timeout or cross maximum attempts.
+ *  @property {Boolean} waitTillSucceed When `true`, retries query until it's timeout or cross maximum attempts.
  */
 export const query = ({
   id,

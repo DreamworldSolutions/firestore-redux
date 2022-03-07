@@ -2,6 +2,8 @@ import * as actions from "./redux/actions";
 import * as selectors from "./redux/selectors";
 import forEach from "lodash-es/forEach";
 import get from "lodash-es/get";
+import isEmpty from "lodash-es/isEmpty";
+import { retry as reAttempt } from "@lifeomic/attempt";
 
 import {
   collectionGroup,
@@ -17,12 +19,13 @@ import {
   limit as fsLimit,
 } from "firebase/firestore";
 class Query {
-  constructor(store, db) {
+  constructor(store, db, pollingConfig) {
     /**
      * A redux store which holds the whole state tree of firestore.
      */
     this.store = store;
     this.db = db;
+    this.pollingConfig = pollingConfig;
     // `unsubscribe` method returned by firestore onSnapshot.
     this._unsubscribe = undefined;
   }
@@ -56,22 +59,29 @@ class Query {
     const once = criteria.once;
     const waitTillSucceed = criteria.waitTillSucceed;
 
-    this.store.dispatch(
-      actions.query({
-        id,
-        collection,
-        requesterId,
-        where,
-        orderBy,
-        startAt,
-        startAfter,
-        endAt,
-        endBefore,
-        limit,
-        once,
-        waitTillSucceed,
-      })
-    );
+    if (!this._waiting) {
+      this.store.dispatch(
+        actions.query({
+          id,
+          collection,
+          requesterId,
+          where,
+          orderBy,
+          startAt,
+          startAfter,
+          endAt,
+          endBefore,
+          limit,
+          once,
+          waitTillSucceed,
+        })
+      );
+
+      this.result = new Promise((resolve, reject) => {
+        this._resolve = resolve;
+        this._reject = reject;
+      });
+    }
 
     const whereCriteria = this.__getWhereCriteria(where);
     const orderByCriteria = this.__getOrderByCriteria(orderBy);
@@ -93,16 +103,16 @@ class Query {
       ...limitCriteria
     );
 
-    this.result = new Promise((resolve, reject) => {
-      this._resolve = resolve;
-      this._reject = reject;
-    });
-
     if (once) {
       this.__queryOnce(params);
     } else {
       this.__queryRealTime(params);
     }
+
+    return new Promise((resolve, reject) => {
+      this._retryResolve = resolve;
+      this._retryReject = reject;
+    });
   }
 
   /**
@@ -138,8 +148,8 @@ class Query {
 
   /**
    * Requests one time query to firestore by given query criteria.
-   *  - On successfull query, dispatches `QUERY_SNAPSHOT` action with query Id & docs.
-   *  - On failure, dispatches `QUERY_FAILED` action with error details.
+   *  - On successfull query, dispatches `FIRESTORE_REDUX_QUERY_SNAPSHOT` action with query Id & docs.
+   *  - On failure, dispatches `FIRESTORE_REDUX_QUERY_FAILED` action with error details.
    */
   async __queryOnce({ q, id, collection }) {
     try {
@@ -155,14 +165,36 @@ class Query {
         });
         i += 1;
       });
-      this.store.dispatch(
-        actions._querySnapShot({ id, collection, docs, status: "CLOSED" })
-      );
-      const result = selectors.docsByQueryFactory(id, collection)(
-        this.store.getState(),
-        collection
-      );
-      this._resolve(result);
+      if (
+        !this._criteria.waitTillSucceed ||
+        (this._criteria.waitTillSucceed && !isEmpty(docs))
+      ) {
+        this.__dispatchQuerySnapshot({
+          id,
+          collection,
+          docs,
+          status: "CLOSED",
+        });
+
+        const result = selectors.docsByQueryFactory(id, collection)(
+          this.store.getState(),
+          collection
+        );
+        this._resolve(result);
+        if (this._criteria.waitTillSucceed) {
+          this._retryResolve(result);
+        }
+        return;
+      }
+
+      if (!this._waiting) {
+        this.__retryTillSucceed();
+      } else {
+        this._retryReject({
+          code: "NOT_FOUND",
+          message: "Document not found after retry as well.",
+        });
+      }
     } catch (error) {
       this.__onQueryFailed(error);
     }
@@ -170,8 +202,8 @@ class Query {
 
   /**
    * Requests real time query to firestore by given query criteria.
-   *  - On result update, dispatches `QUERY_SNAPSHOT` action with query Id & docs.
-   *  - On failure, dispatches `QUERY_FAILED` action with error details.
+   *  - On result update, dispatches `FIRESTORE_REDUX_QUERY_SNAPSHOT` action with query Id & docs.
+   *  - On failure, dispatches `FIRESTORE_REDUX_QUERY_FAILED` action with error details.
    */
   __queryRealTime({ q, id, collection }) {
     let queryResolved;
@@ -205,16 +237,38 @@ class Query {
             });
           }
         });
-        this.store.dispatch(
-          actions._querySnapShot({ id, collection, docs, status: "LIVE" })
-        );
-        if (!queryResolved) {
-          const result = selectors.docsByQueryFactory(
+
+        if (
+          !this._criteria.waitTillSucceed ||
+          (this._criteria.waitTillSucceed && !isEmpty(docs))
+        ) {
+          this.__dispatchQuerySnapshot({
             id,
-            collection
-          )(this.store.getState());
-          this._resolve(result);
-          queryResolved = true;
+            collection,
+            docs,
+            status: "LIVE",
+          });
+          if (!queryResolved) {
+            const result = selectors.docsByQueryFactory(
+              id,
+              collection
+            )(this.store.getState());
+            this._resolve(result);
+            if (this._criteria.waitTillSucceed) {
+              this._retryResolve(result);
+            }
+            queryResolved = true;
+          }
+          return;
+        }
+
+        if (!this._waiting) {
+          this.__retryTillSucceed();
+        } else {
+          this._retryReject({
+            code: "NOT_FOUND",
+            message: "Document not found after retry as well.",
+          });
         }
       },
       (error) => {
@@ -316,13 +370,60 @@ class Query {
   __onQueryFailed(error) {
     this.__unsubscribe();
 
+    if (!this._criteria.waitTillSucceed) {
+      this.__dispatchQueryFailed(error);
+      this._reject(error);
+      return;
+    }
+
+    if (!this._waiting) {
+      this.__retryTillSucceed();
+    } else {
+      this._retryReject(error);
+    }
+  }
+
+  /**
+   * Dispatches `FIRESTORE_REDUX_QUERY_SNAPSHOT` redux action.
+   * @private
+   */
+  __dispatchQuerySnapshot({ id, collection, docs, status }) {
+    this.store.dispatch(
+      actions._querySnapShot({ id, collection, docs, status })
+    );
+  }
+
+  /**
+   * Dispatches `FIRESTORE_REDUX_QUERY_FAILED` redux action.
+   * @private
+   */
+  __dispatchQueryFailed(error) {
     this.store.dispatch(
       actions._queryFailed({
         id: this.id,
         error: { code: error.code, message: error.message },
       })
     );
-    this._reject(error);
+  }
+
+  /**
+   * Retries query till result found.
+   * @private
+   */
+  async __retryTillSucceed() {
+    this._waiting = true;
+    try {
+      await reAttempt(
+        () => this.query(this.id, this._collection, this._criteria),
+        {
+          timeout: this.pollingConfig.timeout,
+          maxAttempts: this.pollingConfig.maxAttempts,
+        }
+      );
+    } catch (error) {
+      this.__dispatchQueryFailed(error);
+      this._reject(error);
+    }
   }
 
   /**
