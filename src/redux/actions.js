@@ -112,41 +112,46 @@ export const cancelQuery = ({ id, requesterId }) => {
 };
 
 /**
- * By defalt saves data in local & remote both
- * When `target` is 'LOCAL', saves data only in local.
- * When `target` is 'REMOTE', saves data only on remote.
- * On success or faulure, dispatches `FIRESTORE_REDUX_SAVE_DONE` or `FIRESTORE_REDUX_SAVE_FAILED` actions.
- * @param {Object} docs Key is the `/` seperated path of document. e.g `users/$userId` & Value is the document. e.g `{'users/$userId': {name, firstNamme, lastName}}`
- *                      Note: Paths must be upto the document.
- * @param {String} target Possible values: `BOTH`, `LOCAL` or `REMOTE`
+ * @param {String} collectionPath Collection/subcollection path.
+ * @param {Object|Array} docs Single or multiple documents
+ * @param {Object} options Options. e.g. { localWrite: true, remoteWrite: true }
  */
-export const save = (docs, target = "BOTH") => {
+export const save = (
+  collectionPath,
+  docs,
+  options = { localWrite: true, remoteWrite: true }
+) => {
   return {
     type: SAVE,
+    collectionPath,
     docs,
-    target,
+    options,
   };
 };
 
 /**
- * @param {Object} docs Key value map of path & document. e.g. {"/users/$userId": {"firstName": "Nirmal", "lastName": "Baldaniya"}, ...}
- * @private
+ * @param {String} collection Collection/subcollection ID.
+ * @param {Array} docs List of documents.
+ * @returns 
  */
-export const _saveDone = (docs) => {
+export const _saveDone = (collection, docs) => {
   return {
     type: SAVE_DONE,
+    collection,
     docs,
   };
 };
 
 /**
  * Resetes documents to it's previous value.
- * @param {Object} prevDocs Previous values of documents. e.g. {$collection: {$docId: $prevDocValue}}
+ * @param {String} collection Collection/subcollection ID.
+ * @param {Array} prevDocs List of documents with its previous value.
  * @private
  */
-export const _saveFailed = (prevDocs) => {
+export const _saveFailed = (collection, prevDocs) => {
   return {
     type: SAVE_FAILED,
+    collection,
     prevDocs,
   };
 };

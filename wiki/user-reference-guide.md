@@ -142,12 +142,12 @@ firestoreRedux.cancelQueryByRequester(requesterId);
 Saves/updates documents of given collection to local as well as on remote.
 
 ```JS
-firestoreRedux.save(collection, docs, options);
+firestoreRedux.save(collectionPath, docs, options);
 ```
 
 ##### Arguments
 
-- `collection (String)` Collection / Subcollection path. if it's subcollection, it's `/` sepereted path upto subcollection. e.g. `boards/$boardId/cards`
+- `collectionPath (String)` Collection / Subcollection path. if it's subcollection, it's `/` sepereted path upto subcollection. e.g. `boards/$boardId/cards`
 - `docs (Object|Array)` Single document or List of documents to be saved or updated.
 - `options (Object)`. Save options. e.g. `{ localWrite: true, remoteWrite: true }` By default `localWrite` & `remoteWrite` both are `true`.
 

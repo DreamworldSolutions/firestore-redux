@@ -5,8 +5,11 @@ import firestoreReducer from "./redux/reducers";
 import { getFirestore } from "firebase/firestore";
 import Query from "./query";
 import GetDocById from "./get-doc-by-id";
+import SaveDocs from "./save-docs";
 import merge from "lodash-es/merge";
 import forEach from "lodash-es/forEach";
+import isEmpty from "lodash-es/isEmpty";
+import isObject from "lodash-es/isObject";
 
 class FirestoreRedux {
   constructor() {
@@ -37,10 +40,7 @@ class FirestoreRedux {
     this.store = store;
     store.addReducers({ firestore: firestoreReducer });
     this.db = getFirestore(firebaseApp);
-    this.readPollingConfig = merge(
-      this._readPollingConfig,
-      readPollingConfig
-    );
+    this.readPollingConfig = merge(this._readPollingConfig, readPollingConfig);
   }
 
   /**
@@ -92,7 +92,11 @@ class FirestoreRedux {
     }
 
     const id = uuidv4();
-    const instance = new GetDocById(this.store, this.db, this.readPollingConfig);
+    const instance = new GetDocById(
+      this.store,
+      this.db,
+      this.readPollingConfig
+    );
     this._queries[id] = instance;
     instance.getDoc(id, collectionPath, documentId, options);
     this._queries[id] = instance;
@@ -101,13 +105,30 @@ class FirestoreRedux {
 
   /**
    * Saves documents in redux state + remote.
-   * @param {String} collection Collection/Subcollection path.
+   * @param {String} collectionPath Collection/Subcollection path.
    * @param {Object|Array} docs Single Document or list of documents to be saved.
    * @param {Object} options Save options. e.g. `{ localWrite: true, remoteWrite: true }`
    * @returns {Promise} Promise resolved when saved on firestore, rejected when save fails.
    */
-  save(collection, docs, options = { localWrite: true, remoteWrite: true }) {
-    return;
+  save(collectionPath, docs, options = { localWrite: true, remoteWrite: true }) {
+    if (!this.store || !this.db) {
+      throw "firebase-redux > save : firestore-redux is not initialized yet.";
+    }
+
+    if (!collectionPath || isEmpty(docs)) {
+      throw `firestore-redux > save : collection or docs are not provided. ${collection}, ${docs}`;
+    }
+
+    if (!this.__isValidCollectionPath(collectionPath)) {
+      throw `firestore-redux > save > Collection/Subcollection path is not valid. ${collectionPath}`;
+    }
+
+    if (!isObject(docs)) {
+      throw `firestore-redux > save : provided docs is not valid object or array. ${docs}`;
+    }
+
+    const instance = new SaveDocs(this.store, this.db);
+    return instance.save(collectionPath, docs, options);
   }
 
   /**

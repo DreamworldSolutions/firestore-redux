@@ -136,16 +136,16 @@ query.loadNextPage(); // This will load 1-100 documents.
 
 ```JS
 // Save documents on local + remote both.
-firestoreRedux.save(collection, docs);
+firestoreRedux.save(collectionPath, docs);
 
 // Save documents only in redux state.
-firestoreRedux.save(collection, docs, { localWrite: true, remoteWrite: false });
+firestoreRedux.save(collectionPath, docs, { localWrite: true, remoteWrite: false });
 
 // Save documents only on remote.
-firestoreRedux.save(collection, docs, { localWrite: false, remoteWrite: true });
+firestoreRedux.save(collectionPath, docs, { localWrite: false, remoteWrite: true });
 
 // Wait till remote changes.
-await firestoreRedux.save(collection, docs);
+await firestoreRedux.save(collectionPath, docs);
 // Do further work...
 ```
 
