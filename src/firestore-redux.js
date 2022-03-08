@@ -6,10 +6,12 @@ import { getFirestore } from "firebase/firestore";
 import Query from "./query";
 import GetDocById from "./get-doc-by-id";
 import SaveDocs from "./save-docs";
+import DeleteDocs from "./delete-docs";
 import merge from "lodash-es/merge";
 import forEach from "lodash-es/forEach";
 import isEmpty from "lodash-es/isEmpty";
 import isObject from "lodash-es/isObject";
+import isArray from "lodash-es/isArray";
 
 class FirestoreRedux {
   constructor() {
@@ -24,7 +26,7 @@ class FirestoreRedux {
     this._queries = {};
 
     // Default configuration for wait till read succeed query.
-    this._readPollingConfig = { timeout: 30000, maxAttempts: 30 };
+    this._readPollingConfig = { timeout: 30000, maxAttempts: 20 };
   }
 
   /**
@@ -110,13 +112,17 @@ class FirestoreRedux {
    * @param {Object} options Save options. e.g. `{ localWrite: true, remoteWrite: true }`
    * @returns {Promise} Promise resolved when saved on firestore, rejected when save fails.
    */
-  save(collectionPath, docs, options = { localWrite: true, remoteWrite: true }) {
+  save(
+    collectionPath,
+    docs,
+    options = { localWrite: true, remoteWrite: true }
+  ) {
     if (!this.store || !this.db) {
       throw "firebase-redux > save : firestore-redux is not initialized yet.";
     }
 
     if (!collectionPath || isEmpty(docs)) {
-      throw `firestore-redux > save : collection or docs are not provided. ${collection}, ${docs}`;
+      throw `firestore-redux > save : collection path or documents are not provided. ${collectionPath}, ${docs}`;
     }
 
     if (!this.__isValidCollectionPath(collectionPath)) {
@@ -133,17 +139,30 @@ class FirestoreRedux {
 
   /**
    * Deletes documents from redux state + remote.
-   * @param {String} collection Collection/Subcollection path.
+   * @param {String} collectionPath Collection/Subcollection path.
    * @param {String|Array} docIds Single document Id or list of document Ids.
    * @param {Object} options Delete options. e.g. `{ localWrite: true, remoteWrite: true }`
    * @returns {Promise} Promise resolved when deleted from firestore, rejected when delete fails.
    */
   delete(
-    collection,
+    collectionPath,
     docIds,
     options = { localWrite: true, remoteWrite: true }
   ) {
-    return;
+    if (!this.store || !this.db) {
+      throw "firebase-redux > delete : firestore-redux is not initialized yet.";
+    }
+
+    if (!collectionPath || isEmpty(docIds)) {
+      throw `firestore-redux > delete : collection path or document ids are not provided. ${collectionPath}, ${docIds}`;
+    }
+
+    if (typeof docIds !== "string" && !isArray(docIds)) {
+      throw `firestore-redux > delete : document ids must be string or array of string. ${docIds}`;
+    }
+
+    const instance = new DeleteDocs(this.store, this.db);
+    return instance.delete(collectionPath, docIds, options);
   }
 
   /**

@@ -115,24 +115,28 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       return oState;
 
     case actions.SAVE:
-      if (action.options.localWrite) {
-        const docs = cloneDeep(action.docs);
-        forEach(docs, (doc) => {
-          const pathSegments = action.collectionPath.split("/");
-          const collection = pathSegments[pathSegments.length - 1];
-          doc._syncPending = true;
-          oState = ReduxUtils.replace(
-            oState,
-            `docs.${collection}.${doc.id}`,
-            doc
-          );
-        });
+      if (!action.options.localWrite) {
+        return oState;
       }
+      const docs = cloneDeep(action.docs);
+      forEach(docs, (doc) => {
+        const pathSegments = action.collectionPath.split("/");
+        const collection = pathSegments[pathSegments.length - 1];
+        doc._syncPending = true;
+        oState = ReduxUtils.replace(
+          oState,
+          `docs.${collection}.${doc.id}`,
+          doc
+        );
+      });
       return oState;
 
     case actions.SAVE_DONE:
       return oState;
     case actions.SAVE_FAILED:
+      if (!action.options.localWrite) {
+        return oState;
+      }
       forEach(action.prevDocs, (doc) => {
         oState = ReduxUtils.replace(
           oState,
@@ -142,31 +146,32 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       });
       return oState;
 
-    case actions.DELETE_DOCS:
-      if (action.target !== "REMOTE") {
-        forEach(action.paths, (path) => {
-          const pathSegments = path.split("/");
-          const collection = pathSegments[pathSegments.length - 2];
-          const docId = pathSegments[pathSegments.length - 1];
-          oState = ReduxUtils.replace(
-            oState,
-            `docs.${collection}.${docId}`,
-            undefined
-          );
-        });
+    case actions.DELETE:
+      if (!action.options.localWrite) {
+        return oState;
       }
+      forEach(action.docIds, (docId) => {
+        const pathSegments = action.collectionPath.split("/");
+        const collection = pathSegments[pathSegments.length - 1];
+        oState = ReduxUtils.replace(
+          oState,
+          `docs.${collection}.${docId}`,
+          undefined
+        );
+      });
       return oState;
-    case actions.DELETE_DOCS_DONE:
+    case actions.DELETE_DONE:
       return oState;
-    case actions.DELETE_DOCS_FAILED:
-      forEach(action.prevDocs, (docs, collection) => {
-        forEach(docs, (doc, docId) => {
-          oState = ReduxUtils.replace(
-            oState,
-            `docs.${collection}.${docId}`,
-            doc
-          );
-        });
+    case actions.DELETE_FAILED:
+      if (!action.options.localWrite) {
+        return oState;
+      }
+      forEach(action.prevDocs, (doc) => {
+        oState = ReduxUtils.replace(
+          oState,
+          `docs.${action.collection}.${doc.id}`,
+          doc
+        );
       });
       return oState;
     default:
