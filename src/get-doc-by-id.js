@@ -30,7 +30,7 @@ class GetDocById {
    * @param {String} documentId Document ID.
    * @param {Object} options Options. e.g. {requesterId, once, waitTillSucceed }`
    */
-  getDoc(id, collectionPath, documentId, options) {
+  getDoc(id, collectionPath, documentId, options={}) {
     this.id = id;
     this._collectionPath = collectionPath;
     this._documentId = documentId;
