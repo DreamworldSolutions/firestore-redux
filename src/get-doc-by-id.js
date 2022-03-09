@@ -1,4 +1,3 @@
-
 import * as actions from "./redux/actions";
 import * as selectors from "./redux/selectors";
 import {
@@ -261,6 +260,8 @@ class GetDocById {
         {
           timeout: this.pollingConfig.timeout,
           maxAttempts: this.pollingConfig.maxAttempts,
+          factor: 2,
+          maxDelay: 1000
         }
       );
     } catch (error) {

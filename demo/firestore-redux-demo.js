@@ -147,6 +147,10 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     this._saveCollection = "alphabets";
     this._saveLocal = true;
     this._saveRemote = true;
+
+    this._deleteCollection = "alphabets";
+    this._deleteLocal = true;
+    this._deleteRemote = true;
   }
 
   firstUpdated(changedProps) {
@@ -447,12 +451,37 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
           <h6 class="headline6">Delete Documents</h6>
           <dw-input
             dense
-            label="Delete Documents"
-            placeholder="Enter array of document paths. e.g. ['users/$userId', 'users/$userId2']"
+            label="Collection"
+            placeholder="Enter Collection/subcollection path."
+            .value=${this._deleteCollection}
             @value-changed=${(e) => {
-              this._deleteDocsString = e.detail.value;
+              this._deleteCollection = e.detail.value;
             }}
           ></dw-input>
+          <dw-input
+            dense
+            label="Document Ids"
+            placeholder="Enter array of document ids.. e.g. ['R6RNtIfCVBVLoZXYpYgN', '7B771W9riFOnLyxWbItL']"
+            @value-changed=${(e) => {
+              this._deleteDocIds = e.detail.value;
+            }}
+          ></dw-input>
+          <div class="switch-container row">
+            <strong>Local Delete</strong>
+            <dw-switch
+              ?checked=${this._deleteLocal}
+              @change=${(e) => {
+                this._deleteLocal = e.target.checked;
+              }}
+            ></dw-switch>
+            <strong>Remote Delete</strong>
+            <dw-switch
+              ?checked=${this._deleteRemote}
+              @change=${(e) => {
+                this._deleteRemote = e.target.checked;
+              }}
+            ></dw-switch>
+          </div>
           <dw-button raised @click=${this.__deleteDocs}
             >Delete documents</dw-button
           >
@@ -563,21 +592,30 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
         JSON.parse(this._saveDocuments),
         { localWrite: this._saveLocal, remoteWrite: this._saveRemote }
       );
-      console.log('saved docs', docs);
+      console.log("saved docs", docs);
     } catch (error) {
       console.error("save error", error);
     }
   }
 
-  __deleteDocs() {
-    if (
-      !this._deleteDocsString ||
-      !this.__isArrayString(this._deleteDocsString)
-    ) {
+  async __deleteDocs() {
+    if (!this._deleteCollection || !this._deleteDocIds) {
       alert("Please Enter valid Array string of paths..");
       return;
     }
-    firestoreRedux.deleteDocs(JSON.parse(this._deleteDocsString));
+
+    const docIds = this.__isArrayString(this._deleteDocIds)
+      ? JSON.parse(this._deleteDocIds)
+      : this._deleteDocIds;
+    try {
+      const ids = await firestoreRedux.delete(this._deleteCollection, docIds, {
+        localWrite: this._deleteLocal,
+        remoteWrite: this._deleteRemote,
+      });
+      console.log('Delete success', ids);
+    } catch (error) {
+      console.error("Delete error", error);
+    }
   }
 
   /**

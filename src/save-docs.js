@@ -39,10 +39,10 @@ class SaveDocs {
     this.store.dispatch(actions.save(collectionPath, docs, options));
 
     if (!options.remoteWrite) {
-      return;
+      return new Promise((resolve) => resolve(docs));
     }
 
-    this.__remoteWrite(collectionPath, docs, prevState);
+    this.__remoteWrite(collectionPath, docs, prevState, options);
     return new Promise((resolve, reject) => {
       this._resolve = resolve;
       this._reject = reject;
@@ -54,30 +54,30 @@ class SaveDocs {
    * @param {String} collectionPath Collection/subcollection path.
    * @param {Array} docs Documents to be saved on remote.
    * @param {Object} prevState Previous state.
+   * @param {Object} options Save options. e.g. `{ localWrite: true, remoteWrite: true }`
    * @private
    */
-  async __remoteWrite(collectionPath, docs, prevState) {
+  async __remoteWrite(collectionPath, docs, prevState, options) {
     let prevDocs = [];
     const batch = writeBatch(this.db);
-    forEach(docs, (doc) => {
-      const pathSegments = collectionPath.split("/");
-      const collection = pathSegments[pathSegments.length - 1];
-      prevDocs.push(
-        get(prevState, `firestore.docs.${collection}.${doc.id}`, {
-          id: doc.id,
-          newDoc: true,
-        })
-      );
+    const pathSegments = collectionPath.split("/");
+    const collection = pathSegments[pathSegments.length - 1];
 
+    forEach(docs, (doc) => {
+      const prevDoc = get(prevState, `firestore.docs.${collection}.${doc.id}`, {
+        id: doc.id,
+        newDoc: true,
+      });
+      prevDoc && prevDocs.push(prevDoc);
       const ref = fsDoc(this.db, ...pathSegments, doc.id);
       batch.set(ref, doc);
     });
     try {
       await batch.commit();
-      this.store.dispatch(actions._saveDone(collectionPath, docs));
+      this.store.dispatch(actions._saveDone(collection, docs));
       this._resolve(docs);
     } catch (error) {
-      this.store.dispatch(actions._saveFailed(collectionPath, prevDocs));
+      this.store.dispatch(actions._saveFailed(collection, prevDocs, options));
       this._reject(error);
     }
   }
