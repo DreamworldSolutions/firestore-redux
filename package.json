@@ -1,0 +1,57 @@
+{
+  "name": "@dreamworld/firestore-redux",
+  "version": "0.0.0-development",
+  "description": "Library which sync cloud firestore data with redux state.",
+  "main": "src/firestore-redux.js",
+  "type": "module",
+  "scripts": {
+    "start": "wds"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DreamworldSolutions/firestore-redux.git"
+  },
+  "author": "Nirmal Baldaniya",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/DreamworldSolutions/firestore-redux/issues"
+  },
+  "homepage": "https://github.com/DreamworldSolutions/firestore-redux#readme",
+  "dependencies": {
+    "@lifeomic/attempt": "^3.0.2",
+    "@dw/pwa-helpers": "^1.5.2",
+    "firebase": "^9.6.6",
+    "lodash-es": "^4.17.21",
+    "redux": "^4.1.2",
+    "reselect": "^4.1.5",
+    "uuid": "^8.3.2"
+  },
+  "devDependencies": {
+    "@dreamworld/dw-button": "^2.1.2",
+    "@dreamworld/dw-input": "^2.3.1",
+    "@dreamworld/dw-radio-button": "^3.0.0",
+    "@dreamworld/dw-switch": "^2.1.0",
+    "@dreamworld/material-styles": "^2.0.0",
+    "@dreamworld/pwa-helpers": "^1.11.1",
+    "@rollup/plugin-commonjs": "^21.0.1",
+    "@web/dev-server": "^0.1.29",
+    "lit": "^2.1.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "resolutions": {
+    "tslib": "2.1.0"
+  },
+  "release": {
+    "branches": [
+      "+([0-9])?(.{+([0-9]),x}).x",
+      "main",
+      {
+        "name": "feature/*",
+        "prerelease": "${name.replace(/^feature\\//g,\"\")}",
+        "channel": "${name.replace(/^feature\\//g,\"\")}"
+      }
+    ]
+  }
+}
