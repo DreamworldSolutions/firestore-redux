@@ -418,6 +418,8 @@ class Query {
         {
           timeout: this.pollingConfig.timeout,
           maxAttempts: this.pollingConfig.maxAttempts,
+          factor: 2,
+          maxDelay: 1000
         }
       );
     } catch (error) {

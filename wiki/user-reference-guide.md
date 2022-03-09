@@ -14,7 +14,7 @@ firestoreRedux.init(store, firebaseApp);
 
 - `store (Object)` Redux Store. It is mandatory.
 - `firebaseApp (Object)` Firebase app. It is optional.
-- `readPollingConfig` Configurations for waiting query. This is ignored when `waitTillSucceed` query criteria is not `true`. Default is `{ timeout: 30000, maxAttempts: 30 }`. 
+- `readPollingConfig` Configurations for waiting query. This is ignored when `waitTillSucceed` query criteria is not `true`. Default is `{ timeout: 30000, maxAttempts: 20 }`. 
 
 ##### returns
 
@@ -142,12 +142,12 @@ firestoreRedux.cancelQueryByRequester(requesterId);
 Saves/updates documents of given collection to local as well as on remote.
 
 ```JS
-firestoreRedux.save(collection, docs, options);
+firestoreRedux.save(collectionPath, docs, options);
 ```
 
 ##### Arguments
 
-- `collection (String)` Collection / Subcollection path. if it's subcollection, it's `/` sepereted path upto subcollection. e.g. `boards/$boardId/cards`
+- `collectionPath (String)` Collection / Subcollection path. if it's subcollection, it's `/` sepereted path upto subcollection. e.g. `boards/$boardId/cards`
 - `docs (Object|Array)` Single document or List of documents to be saved or updated.
 - `options (Object)`. Save options. e.g. `{ localWrite: true, remoteWrite: true }` By default `localWrite` & `remoteWrite` both are `true`.
 
@@ -160,12 +160,12 @@ firestoreRedux.save(collection, docs, options);
 Deletes documents of given collection from local as well as on remote.
 
 ```JS
-firestoreRedux.delete(collection, docIds, options);
+firestoreRedux.delete(collectionPath, docIds, options);
 ```
 
 ##### Arguments
 
-- `collection (String)` Collection / Subcollection path.
+- `collectionPath (String)` Collection / Subcollection path.
 - `docIds (String|Array)` Single doc Id or List of document Ids.
 - `options (Object)`. Save options. e.g. `{ localWrite: true, remoteWrite: true }` By default `localWrite` & `remoteWrite` both are `true`.
 
