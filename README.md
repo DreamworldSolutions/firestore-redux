@@ -13,9 +13,9 @@ import { initializeApp } from "firebase/app";
 import firestoreRedux from "@dreamworld/firestore-redux";
 import { store } from "./store.js"; // This is store.js PATH of your application where store is created using `createStore` So replace it if required.
 const firebaseConfig = {}; /* Firebase Configurations. e.g. { "apiKey": "AIzaSyAD9RzBEZ_pzZomgIbyIHo0No4PoFDm2Zc", "authDomain": "friendlyeats-d6aa1.firebaseapp.com", "projectId": "friendlyeats-d6aa1" } */
-const waitTillReadSucceedConfig = { timeout: 30000 , maxAttempts: 20 }; // timeout is in milliseconds.
+const readPollingConfig = { timeout: 30000 , maxAttempts: 20 }; // timeout is in milliseconds.
 const firebaseApp = initializeApp(firebaseConfig);
-firestoreRedux.init({ store, firebaseApp, waitTillReadSucceedConfig });
+firestoreRedux.init({ store, firebaseApp, readPollingConfig });
 ```
 
 ### Read documents by query criteria.
@@ -136,16 +136,16 @@ query.loadNextPage(); // This will load 1-100 documents.
 
 ```JS
 // Save documents on local + remote both.
-firestoreRedux.save(collection, docs);
+firestoreRedux.save(collectionPath, docs);
 
 // Save documents only in redux state.
-firestoreRedux.save(collection, docs, { localWrite: true, remoteWrite: false });
+firestoreRedux.save(collectionPath, docs, { localWrite: true, remoteWrite: false });
 
 // Save documents only on remote.
-firestoreRedux.save(collection, docs, { localWrite: false, remoteWrite: true });
+firestoreRedux.save(collectionPath, docs, { localWrite: false, remoteWrite: true });
 
 // Wait till remote changes.
-await firestoreRedux.save(collection, docs);
+await firestoreRedux.save(collectionPath, docs);
 // Do further work...
 ```
 
@@ -153,16 +153,16 @@ await firestoreRedux.save(collection, docs);
 
 ```JS
 // Delete documents from local + remote both.
-firestoreRedux.delete(collection, docIds);
+firestoreRedux.delete(collectionPath, docIds);
 
 // Delete documents from local only.
-firestoreRedux.delete(collection, docIds, {localWrite: true, remoteWrite: false });
+firestoreRedux.delete(collectionPath, docIds, { localWrite: true, remoteWrite: false });
 
 // Delete documents from remote only.
-firestoreRedux.delete(collection, docIds, { remoteWrite: true, localWrite: false });
+firestoreRedux.delete(collectionPath, docIds, { remoteWrite: true, localWrite: false });
 
 // Wait till remote changes.
-await firestoreRedux.delete(collection, docIds);
+await firestoreRedux.delete(collectionPath, docIds);
 // Do further work...
 ```
 
