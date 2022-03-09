@@ -62,6 +62,10 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
         overflow: auto;
       }
 
+      .row strong:not(:nth-child(1)) {
+        margin-left: 32px;
+      }
+
       dw-textarea {
         border: 2px solid lightgray;
         border-radius: 8px;
@@ -139,7 +143,14 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
       requesterId: "req-id",
       orderBy: '[["name", "asc"]]',
     };
-    this._saveTarget = "BOTH";
+
+    this._saveCollection = "alphabets";
+    this._saveLocal = true;
+    this._saveRemote = true;
+
+    this._deleteCollection = "alphabets";
+    this._deleteLocal = true;
+    this._deleteRemote = true;
   }
 
   firstUpdated(changedProps) {
@@ -288,6 +299,13 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
               this._query.once = e.target.checked;
             }}
           ></dw-switch>
+
+          <strong>Wait Till Read Succeed</strong>:
+          <dw-switch
+            @change=${(e) => {
+              this._query.waitTillSucceed = e.target.checked;
+            }}
+          ></dw-switch>
         </div>
         <dw-button raised @click=${this.__requestQuery}
           >Request Query</dw-button
@@ -339,6 +357,13 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
               this._singleDocOnce = e.target.checked;
             }}
           ></dw-switch>
+
+          <strong>Wait Till Read Succeed</strong>:
+          <dw-switch
+            @change=${(e) => {
+              this._singleDocwaitTillSucceed = e.target.checked;
+            }}
+          ></dw-switch>
         </div>
         <dw-button raised @click=${this._readDoc}>Read Document</dw-button>
       </div>
@@ -388,35 +413,37 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
           <h6 class="headline6">Save Documents.</h6>
           <dw-input
             dense
-            label="Save Documents"
-            placeholder="Enter key/value map of the documents. e.g. {'users/NIRMAL_B': {'name': Nirmal, 'lastName': 'B'}}"
+            label="Collection Path"
+            placeholder="Enter collection / subcollection path."
+            .value=${this._saveCollection}
             @value-changed=${(e) => {
-              this._saveDocsString = e.detail.value;
+              this._saveCollection = e.detail.value;
             }}
           ></dw-input>
-          <dw-radio-group
-            name="saveTarget"
-            value=${this._saveTarget}
-            @change=${(e) => {
-              this._saveTarget = e.target.value;
+          <dw-input
+            dense
+            label="Documents"
+            placeholder="Enter document. e.g. [{'name': 'kite'}, {'name': 'lamp'}]"
+            @value-changed=${(e) => {
+              this._saveDocuments = e.detail.value;
             }}
-          >
-            <dw-radio-button
-              label="Both"
-              name="saveTarget"
-              value="BOTH"
-            ></dw-radio-button>
-            <dw-radio-button
-              label="LOCAL"
-              name="saveTarget"
-              value="LOCAL"
-            ></dw-radio-button>
-            <dw-radio-button
-              label="REMOTE"
-              name="saveTarget"
-              value="REMOTE"
-            ></dw-radio-button>
-          </dw-radio-group>
+          ></dw-input>
+          <div class="switch-container row">
+            <strong>Local Write</strong>
+            <dw-switch
+              ?checked=${this._saveLocal}
+              @change=${(e) => {
+                this._saveLocal = e.target.checked;
+              }}
+            ></dw-switch>
+            <strong>Remote Write</strong>
+            <dw-switch
+              ?checked=${this._saveRemote}
+              @change=${(e) => {
+                this._saveRemote = e.target.checked;
+              }}
+            ></dw-switch>
+          </div>
           <dw-button raised @click=${this.__saveDocs}>Save Document</dw-button>
         </div>
 
@@ -424,12 +451,37 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
           <h6 class="headline6">Delete Documents</h6>
           <dw-input
             dense
-            label="Delete Documents"
-            placeholder="Enter array of document paths. e.g. ['users/$userId', 'users/$userId2']"
+            label="Collection"
+            placeholder="Enter Collection/subcollection path."
+            .value=${this._deleteCollection}
             @value-changed=${(e) => {
-              this._deleteDocsString = e.detail.value;
+              this._deleteCollection = e.detail.value;
             }}
           ></dw-input>
+          <dw-input
+            dense
+            label="Document Ids"
+            placeholder="Enter array of document ids.. e.g. ['R6RNtIfCVBVLoZXYpYgN', '7B771W9riFOnLyxWbItL']"
+            @value-changed=${(e) => {
+              this._deleteDocIds = e.detail.value;
+            }}
+          ></dw-input>
+          <div class="switch-container row">
+            <strong>Local Delete</strong>
+            <dw-switch
+              ?checked=${this._deleteLocal}
+              @change=${(e) => {
+                this._deleteLocal = e.target.checked;
+              }}
+            ></dw-switch>
+            <strong>Remote Delete</strong>
+            <dw-switch
+              ?checked=${this._deleteRemote}
+              @change=${(e) => {
+                this._deleteRemote = e.target.checked;
+              }}
+            ></dw-switch>
+          </div>
           <dw-button raised @click=${this.__deleteDocs}
             >Delete documents</dw-button
           >
@@ -446,7 +498,11 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     try {
       this._firebaseConfig = JSON.parse(this._firebaseConfigString);
       this._firebaseApp = initializeApp(this._firebaseConfig);
-      firestoreRedux.init({ store, firebaseApp: this._firebaseApp, waitTillReadSucceedConfig: { timeout: 20000, maxAttempts: 20 } });
+      firestoreRedux.init({
+        store,
+        firebaseApp: this._firebaseApp,
+        readPollingConfig: { timeout: 10000, maxAttempts: 20 },
+      });
     } catch (err) {
       console.error(err);
       alert("Something is wrong. Please see the error detail in console.");
@@ -472,32 +528,40 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     const query = cloneDeep(this._query);
     query.where = this._query.where && JSON.parse(this._query.where);
     query.orderBy = this._query.orderBy && JSON.parse(this._query.orderBy);
-
     try {
-      const q = firestoreRedux.query(this._queryCollection, query);
-      const result = await q.result;
+      window.q = firestoreRedux.query(this._queryCollection, query);
+      const result = await window.q.result;
       console.log({ result });
       setTimeout(() => {
-        q.loadNextPage();
-      }, 5000)
+        window.q.loadNextPage();
+      }, 5000);
     } catch (error) {
-      console.error("Catch error", error);
+      console.log("Catch error", error);
+      window.q.retry();
     }
   }
 
   async _readDoc() {
-    if (!this._singleDocCollection || !this._singleDocId) {
-      alert("Please provide Mandatory fields.");
-      return;
+    try {
+      if (!this._singleDocCollection || !this._singleDocId) {
+        alert("Please provide Mandatory fields.");
+        return;
+      }
+
+      window.req = firestoreRedux.getDocById(
+        this._singleDocCollection,
+        this._singleDocId,
+        {
+          once: this._singleDocOnce,
+          requesterId: this._singleDocRequester,
+          waitTillSucceed: this._singleDocwaitTillSucceed,
+        }
+      );
+      const result = await window.req.result;
+      console.log({ result });
+    } catch (error) {
+      window.req.retry();
     }
-
-    const req = firestoreRedux.getDocById(this._singleDocCollection, this._singleDocId, {
-      once: this._singleDocOnce,
-      requesterId: this._singleDocRequester,
-    });
-    const result = await req.result;
-
-    console.log({ result });
   }
 
   __cancelQuery() {
@@ -513,26 +577,45 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
       alert("Please enter requesterId");
       return;
     }
-    firestoreRedux.actions.cancelQuery(this._cancelRequesterId);
+    firestoreRedux.cancelQueryByRequester(this._cancelRequesterId);
   }
 
-  __saveDocs() {
-    if (!this._saveDocsString || !this.__isJSONString(this._saveDocsString)) {
-      alert("Please Enter valid Object string of documents..");
+  async __saveDocs() {
+    if (!this._saveCollection || !this.__isJSONString(this._saveDocuments)) {
+      alert("Please Enter collection & valid document.");
       return;
     }
-    firestoreRedux.save(JSON.parse(this._saveDocsString), this._saveTarget);
+
+    try {
+      const docs = await firestoreRedux.save(
+        this._saveCollection,
+        JSON.parse(this._saveDocuments),
+        { localWrite: this._saveLocal, remoteWrite: this._saveRemote }
+      );
+      console.log("saved docs", docs);
+    } catch (error) {
+      console.error("save error", error);
+    }
   }
 
-  __deleteDocs() {
-    if (
-      !this._deleteDocsString ||
-      !this.__isArrayString(this._deleteDocsString)
-    ) {
+  async __deleteDocs() {
+    if (!this._deleteCollection || !this._deleteDocIds) {
       alert("Please Enter valid Array string of paths..");
       return;
     }
-    firestoreRedux.deleteDocs(JSON.parse(this._deleteDocsString));
+
+    const docIds = this.__isArrayString(this._deleteDocIds)
+      ? JSON.parse(this._deleteDocIds)
+      : this._deleteDocIds;
+    try {
+      const ids = await firestoreRedux.delete(this._deleteCollection, docIds, {
+        localWrite: this._deleteLocal,
+        remoteWrite: this._deleteRemote,
+      });
+      console.log('Delete success', ids);
+    } catch (error) {
+      console.error("Delete error", error);
+    }
   }
 
   /**

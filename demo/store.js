@@ -1,8 +1,6 @@
 import { createStore, compose, combineReducers } from "redux";
-import createSagaMiddleware from "redux-saga";
 import { lazyReducerEnhancer } from "pwa-helpers/lazy-reducer-enhancer";
 
-export const sagaMiddleware = createSagaMiddleware();
 
 // Sets up a Chrome extension for time travel debugging.
 // See https://github.com/zalmoxisus/redux-devtools-extension for more information.

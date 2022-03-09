@@ -5,7 +5,6 @@ import get from "lodash-es/get";
 import forEach from "lodash-es/forEach";
 import isEqual from "lodash-es/isEqual";
 import filter from "lodash-es/filter";
-import merge from "lodash-es/merge";
 import cloneDeep from "lodash-es/cloneDeep";
 import { ReduxUtils } from "@dw/pwa-helpers/redux-utils";
 
@@ -100,78 +99,79 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       }
 
       if (action.requesterId) {
-        forEach(
-          get(oState, `queries`),
-          (query, id) => {
-            if((query.status === "LIVE" || query.status === "PENDING") &&
-            query.requesterId === requesterId) {
-              oState = ReduxUtils.replace(oState, `queries.${id}.status`, "CLOSED");
-            }
+        forEach(get(oState, `queries`), (query, id) => {
+          if (
+            (query.status === "LIVE" || query.status === "PENDING") &&
+            query.requesterId === action.requesterId
+          ) {
+            oState = ReduxUtils.replace(
+              oState,
+              `queries.${id}.status`,
+              "CLOSED"
+            );
           }
-        );
+        });
       }
       return oState;
 
     case actions.SAVE:
-      if (action.target !== "REMOTE") {
-        const docs = cloneDeep(action.docs);
-        forEach(docs, (doc, path) => {
-          const pathSegments = path.split("/");
-          const collection = pathSegments[pathSegments.length - 2];
-          const docId = pathSegments[pathSegments.length - 1];
-          const currDoc = cloneDeep(
-            get(state, `docs.${collection}.${docId}`, {})
-          );
-          doc._syncPending = true;
-          doc = merge(currDoc, doc);
-          oState = ReduxUtils.replace(
-            oState,
-            `docs.${collection}.${docId}`,
-            doc
-          );
-        });
+      if (!action.options.localWrite) {
+        return oState;
       }
+      const docs = cloneDeep(action.docs);
+      forEach(docs, (doc) => {
+        const pathSegments = action.collectionPath.split("/");
+        const collection = pathSegments[pathSegments.length - 1];
+        doc._syncPending = true;
+        oState = ReduxUtils.replace(
+          oState,
+          `docs.${collection}.${doc.id}`,
+          doc
+        );
+      });
       return oState;
 
     case actions.SAVE_DONE:
       return oState;
     case actions.SAVE_FAILED:
-      forEach(action.prevDocs, (docs, collection) => {
-        forEach(docs, (doc, docId) => {
-          oState = ReduxUtils.replace(
-            oState,
-            `docs.${collection}.${docId}`,
-            doc
-          );
-        });
+      if (!action.options.localWrite) {
+        return oState;
+      }
+      forEach(action.prevDocs, (doc) => {
+        oState = ReduxUtils.replace(
+          oState,
+          `docs.${action.collection}.${doc.id}`,
+          doc.newDoc ? undefined : doc
+        );
       });
       return oState;
 
-    case actions.DELETE_DOCS:
-      if (action.target !== "REMOTE") {
-        forEach(action.paths, (path) => {
-          const pathSegments = path.split("/");
-          const collection = pathSegments[pathSegments.length - 2];
-          const docId = pathSegments[pathSegments.length - 1];
-          oState = ReduxUtils.replace(
-            oState,
-            `docs.${collection}.${docId}`,
-            undefined
-          );
-        });
+    case actions.DELETE:
+      if (!action.options.localWrite) {
+        return oState;
       }
+      forEach(action.docIds, (docId) => {
+        const pathSegments = action.collectionPath.split("/");
+        const collection = pathSegments[pathSegments.length - 1];
+        oState = ReduxUtils.replace(
+          oState,
+          `docs.${collection}.${docId}`,
+          undefined
+        );
+      });
       return oState;
-    case actions.DELETE_DOCS_DONE:
+    case actions.DELETE_DONE:
       return oState;
-    case actions.DELETE_DOCS_FAILED:
-      forEach(action.prevDocs, (docs, collection) => {
-        forEach(docs, (doc, docId) => {
-          oState = ReduxUtils.replace(
-            oState,
-            `docs.${collection}.${docId}`,
-            doc
-          );
-        });
+    case actions.DELETE_FAILED:
+      if (!action.options.localWrite) {
+        return oState;
+      }
+      forEach(action.prevDocs, (doc) => {
+        oState = ReduxUtils.replace(
+          oState,
+          `docs.${action.collection}.${doc.id}`,
+          doc
+        );
       });
       return oState;
     default:

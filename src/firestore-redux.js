@@ -1,10 +1,17 @@
 import { v4 as uuidv4 } from "uuid";
-import * as _selectors from "./redux/selectors.js";
+import * as actions from "./redux/actions";
+import * as _selectors from "./redux/selectors";
 import firestoreReducer from "./redux/reducers";
 import { getFirestore } from "firebase/firestore";
 import Query from "./query";
 import GetDocById from "./get-doc-by-id";
+import SaveDocs from "./save-docs";
+import DeleteDocs from "./delete-docs";
 import merge from "lodash-es/merge";
+import forEach from "lodash-es/forEach";
+import isEmpty from "lodash-es/isEmpty";
+import isObject from "lodash-es/isObject";
+import isArray from "lodash-es/isArray";
 
 class FirestoreRedux {
   constructor() {
@@ -16,28 +23,26 @@ class FirestoreRedux {
     /**
      * Holds queries. key is the id of the query, and value is it's instance.
      */
-    this.queries = {};
+    this._queries = {};
 
     // Default configuration for wait till read succeed query.
-    this._waitTillReadSucceedConfig = { timeout: 30000, maxAttempts: 30 };
+    this._readPollingConfig = { timeout: 30000, maxAttempts: 20 };
   }
 
   /**
    * Initialize library. (Sets store property & adds `firestore` reducer)
    * @param {Object} store Redux Store.
    * @param {Object} firebaseApp Firebase app. It's optional.
+   * @param {Object} readPollingConfig. Query polling config.
    */
-  init({ store, firebaseApp, waitTillReadSucceedConfig }) {
+  init({ store, firebaseApp, readPollingConfig }) {
     if (!store) {
       throw "firestore-redux : redux store is not provided.";
     }
     this.store = store;
     store.addReducers({ firestore: firestoreReducer });
     this.db = getFirestore(firebaseApp);
-    this.waitTillReadSucceedConfig = merge(
-      this._waitTillReadSucceedConfig,
-      waitTillReadSucceedConfig
-    );
+    this.readPollingConfig = merge(this._readPollingConfig, readPollingConfig);
   }
 
   /**
@@ -59,9 +64,10 @@ class FirestoreRedux {
     }
 
     const id = uuidv4();
-    const instance = new Query(this.store, this.db);
-    this.queries[id] = instance;
+    const instance = new Query(this.store, this.db, this.readPollingConfig);
+    this._queries[id] = instance;
     instance.query(id, collection, criteria);
+    this._queries[id] = instance;
     return instance;
   }
 
@@ -88,36 +94,75 @@ class FirestoreRedux {
     }
 
     const id = uuidv4();
-    const instance = new GetDocById(this.store, this.db);
-    this.queries[id] = instance;
+    const instance = new GetDocById(
+      this.store,
+      this.db,
+      this.readPollingConfig
+    );
+    this._queries[id] = instance;
     instance.getDoc(id, collectionPath, documentId, options);
+    this._queries[id] = instance;
     return instance;
   }
 
   /**
    * Saves documents in redux state + remote.
-   * @param {String} collection Collection/Subcollection path.
+   * @param {String} collectionPath Collection/Subcollection path.
    * @param {Object|Array} docs Single Document or list of documents to be saved.
    * @param {Object} options Save options. e.g. `{ localWrite: true, remoteWrite: true }`
    * @returns {Promise} Promise resolved when saved on firestore, rejected when save fails.
    */
-  save(collection, docs, options = { localWrite: true, remoteWrite: true }) {
-    return;
+  save(
+    collectionPath,
+    docs,
+    options = { localWrite: true, remoteWrite: true }
+  ) {
+    if (!this.store || !this.db) {
+      throw "firebase-redux > save : firestore-redux is not initialized yet.";
+    }
+
+    if (!collectionPath || isEmpty(docs)) {
+      throw `firestore-redux > save : collection path or documents are not provided. ${collectionPath}, ${docs}`;
+    }
+
+    if (!this.__isValidCollectionPath(collectionPath)) {
+      throw `firestore-redux > save > Collection/Subcollection path is not valid. ${collectionPath}`;
+    }
+
+    if (!isObject(docs)) {
+      throw `firestore-redux > save : provided docs is not valid object or array. ${docs}`;
+    }
+
+    const instance = new SaveDocs(this.store, this.db);
+    return instance.save(collectionPath, docs, options);
   }
 
   /**
    * Deletes documents from redux state + remote.
-   * @param {String} collection Collection/Subcollection path.
+   * @param {String} collectionPath Collection/Subcollection path.
    * @param {String|Array} docIds Single document Id or list of document Ids.
    * @param {Object} options Delete options. e.g. `{ localWrite: true, remoteWrite: true }`
    * @returns {Promise} Promise resolved when deleted from firestore, rejected when delete fails.
    */
   delete(
-    collection,
+    collectionPath,
     docIds,
     options = { localWrite: true, remoteWrite: true }
   ) {
-    return;
+    if (!this.store || !this.db) {
+      throw "firebase-redux > delete : firestore-redux is not initialized yet.";
+    }
+
+    if (!collectionPath || isEmpty(docIds)) {
+      throw `firestore-redux > delete : collection path or document ids are not provided. ${collectionPath}, ${docIds}`;
+    }
+
+    if (typeof docIds !== "string" && !isArray(docIds)) {
+      throw `firestore-redux > delete : document ids must be string or array of string. ${docIds}`;
+    }
+
+    const instance = new DeleteDocs(this.store, this.db);
+    return instance.delete(collectionPath, docIds, options);
   }
 
   /**
@@ -125,14 +170,40 @@ class FirestoreRedux {
    * @param {String} id Query Id.
    */
   cancelQuery(id) {
-    return;
+    const status = _selectors.queryStatus(this.store.getState(), id);
+    if (!id || !status || (status !== "LIVE" && status !== "PENDING")) {
+      return;
+    }
+    this.store.dispatch(actions.cancelQuery({ id }));
+    this.__cancel(id);
   }
 
   /**
    * Cancels all live queries by requester id.
    * @param {String} requesterId Requester Id.
    */
-  cancelQueryByRequester(requesterId) {}
+  cancelQueryByRequester(requesterId) {
+    const liveQueries = _selectors.liveQueriesByRequester(
+      this.store.getState(),
+      requesterId
+    );
+    forEach(liveQueries, (id) => {
+      this.__cancel(id);
+    });
+    this.store.dispatch(actions.cancelQuery({ requesterId }));
+  }
+
+  /**
+   * Unsubscribes firestore query.
+   * @param {String} id Query Id.
+   * @private
+   */
+  __cancel(id) {
+    if (this._queries[id]) {
+      this._queries[id].cancel();
+      delete this._queries[id];
+    }
+  }
 
   /**
    * @param {String} path Collection/Subcollection path.
