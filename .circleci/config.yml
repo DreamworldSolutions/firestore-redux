@@ -27,7 +27,7 @@ jobs:
               git config user.email "dw-devops@dreamworld.solutions"
               git config user.name "DW Devops"
               git remote set-url --push origin https://${GH_TOKEN}@github.com/DreamworldSolutions/$CIRCLE_PROJECT_REPONAME.git
-              (git checkout -b feature/development origin/master || true)
+              (git checkout -b feature/development origin/main || true)
               (git pull origin feature/development || true)
               git merge origin/$CIRCLE_BRANCH --no-ff --no-edit
               git push origin feature/development
@@ -70,7 +70,7 @@ workflows:
           filters:
             branches:
               ignore:
-                - master
+                - main
                 - feature/development
   release:
     jobs:
@@ -85,5 +85,5 @@ workflows:
           filters:
               branches:
                 only:
-                  - master
+                  - main
 
