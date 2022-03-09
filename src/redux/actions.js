@@ -8,9 +8,9 @@ export const CANCEL_QUERY = "FIRESTORE_REDUX_CANCEL_QUERY";
 export const SAVE = "FIRESTORE_REDUX_SAVE";
 export const SAVE_DONE = "FIRESTORE_REDUX_SAVE_DONE";
 export const SAVE_FAILED = "FIRESTORE_REDUX_SAVE_FAILED";
-export const DELETE_DOCS = "FIRESTORE_REDUX_DELETE_DOCS";
-export const DELETE_DOCS_DONE = "FIRESTORE_REDUX_DELETE_DOCS_DONE";
-export const DELETE_DOCS_FAILED = "FIRESTORE_REDUX_DELETE_DOCS_FAILED";
+export const DELETE = "FIRESTORE_REDUX_DELETE";
+export const DELETE_DONE = "FIRESTORE_REDUX_DELETE_DONE";
+export const DELETE_FAILED = "FIRESTORE_REDUX_DELETE_FAILED";
 
 /**
  * Stores query with PENDING status.
@@ -27,7 +27,7 @@ export const DELETE_DOCS_FAILED = "FIRESTORE_REDUX_DELETE_DOCS_FAILED";
  *  @property {Any} endBefore The field values to end this query before, in order of the query's order by. It is optional.
  *  @property {Number} limit The maximum number of items to return. It is optional.
  *  @property {Boolean} once When `true`, does not subscribe for realtime changes. It is optional.
- *  @property {Boolean} waitTillReadSucceed When `true`, retries query until it's timeout or cross maximum attempts.
+ *  @property {Boolean} waitTillSucceed When `true`, retries query until it's timeout or cross maximum attempts.
  */
 export const query = ({
   id,
@@ -112,81 +112,91 @@ export const cancelQuery = ({ id, requesterId }) => {
 };
 
 /**
- * By defalt saves data in local & remote both
- * When `target` is 'LOCAL', saves data only in local.
- * When `target` is 'REMOTE', saves data only on remote.
- * On success or faulure, dispatches `FIRESTORE_REDUX_SAVE_DONE` or `FIRESTORE_REDUX_SAVE_FAILED` actions.
- * @param {Object} docs Key is the `/` seperated path of document. e.g `users/$userId` & Value is the document. e.g `{'users/$userId': {name, firstNamme, lastName}}`
- *                      Note: Paths must be upto the document.
- * @param {String} target Possible values: `BOTH`, `LOCAL` or `REMOTE`
+ * @param {String} collectionPath Collection/subcollection path.
+ * @param {Object|Array} docs Single or multiple documents
+ * @param {Object} options Options. e.g. { localWrite: true, remoteWrite: true }
  */
-export const save = (docs, target = "BOTH") => {
+export const save = (
+  collectionPath,
+  docs,
+  options = { localWrite: true, remoteWrite: true }
+) => {
   return {
     type: SAVE,
+    collectionPath,
     docs,
-    target,
+    options,
   };
 };
 
 /**
- * @param {Object} docs Key value map of path & document. e.g. {"/users/$userId": {"firstName": "Nirmal", "lastName": "Baldaniya"}, ...}
- * @private
+ * @param {String} collection Collection/subcollection ID.
+ * @param {Array} docs List of documents.
  */
-export const _saveDone = (docs) => {
+export const _saveDone = (collection, docs) => {
   return {
     type: SAVE_DONE,
+    collection,
     docs,
   };
 };
 
 /**
  * Resetes documents to it's previous value.
- * @param {Object} prevDocs Previous values of documents. e.g. {$collection: {$docId: $prevDocValue}}
- * @private
+ * @param {String} collection Collection/subcollection ID.
+ * @param {Array} prevDocs List of documents with its previous value.
+ * @param {Object} options Options. e.g. { localWrite: true, remoteWrite: true }
  */
-export const _saveFailed = (prevDocs) => {
+export const _saveFailed = (collection, prevDocs, options) => {
   return {
     type: SAVE_FAILED,
+    collection,
     prevDocs,
+    options,
   };
 };
 
 /**
- * By default deletes document from local as well as remote.
- * When `target` is 'LOCAL', deletes documents from local state only.
- * When `target` is 'REMOTE', deletes documents from remote only.
- * On success or faulure, dispatches `FIRESTORE_REDUX_DELETE_DONE` or `FIRESTORE_REDUX_DELETE_FAILED` actions.
- * @param {Array} paths List of `/` seperated path. e.g `['users/$userId1', 'users/$userId2']`. Here `users` is the collection name.
- *                      Note: Paths must be upto the document.
- * @param {String} target Possible values: `BOTH`, `LOCAL` or `REMOTE`
+ * @param {String} collectionPath Collection/subcollection path.
+ * @param {String|Array} docIds Single or multiple document Ids.
+ * @param {Object} options Options. e.g. { localWrite: true, remoteWrite: true }
  */
-export const deleteDocs = (paths, target = "BOTH") => {
+export const deleteDocs = (
+  collectionPath,
+  docIds,
+  options = { localWrite: true, remoteWrite: true }
+) => {
   return {
-    type: DELETE_DOCS,
-    paths,
-    target,
+    type: DELETE,
+    collectionPath,
+    docIds,
+    options,
   };
 };
 
 /**
- * @param {Array} paths List of deleted document's paths.
- * @private
+ * @param {String} collection Collection/subcollection ID.
+ * @param {Array} docIds List of document Ids.
  */
-export const _deleteDocsDone = (paths) => {
+export const _deleteDone = (collection, docIds) => {
   return {
-    type: DELETE_DOCS_DONE,
-    paths,
+    type: DELETE_DONE,
+    collection,
+    docIds,
   };
 };
 
 /**
  * Resetes documents to it's previous value.
- * @param {Object} prevDocs Previous values of documents. e.g. {$collection: {$docId: $prevDocValue}}
- * @private
+ * @param {String} collection Collection/subcollection ID.
+ * @param {Array} prevDocs List of documents with its previous value.
+ * @param {Object} options Options. e.g. { localWrite: true, remoteWrite: true }
  */
-export const _deleteDocsFailed = (prevDocs) => {
+export const _deleteFailed = (collection, prevDocs, options) => {
   return {
-    type: DELETE_DOCS_FAILED,
+    type: DELETE_FAILED,
+    collection,
     prevDocs,
+    options,
   };
 };
