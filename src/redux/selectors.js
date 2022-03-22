@@ -3,6 +3,7 @@ import values from "lodash-es/values";
 import filter from "lodash-es/filter";
 import forEach from "lodash-es/forEach";
 import { createSelector } from "reselect";
+import memoize from "proxy-memoize";
 
 /**
  * @param {Object} state Redux State.
@@ -103,3 +104,12 @@ export const liveQueriesByRequester = createSelector(
     return liveQueries.map(({ id }) => id) || [];
   }
 );
+
+/**
+ * @param {Object} state.
+ * @param {String} requesterId.
+ * @returns {Array} All queries by requesterId.
+ */
+export const queriesByRequester = memoize(({ state, requesterId }) => {
+  return filter(get(state, `firestore.queries`), { requesterId });
+});

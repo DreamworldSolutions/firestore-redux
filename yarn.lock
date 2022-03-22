@@ -2094,6 +2094,18 @@ protobufjs@^6.10.0:
     "@types/node" ">=13.7.0"
     long "^4.0.0"
 
+proxy-compare@2.1.0:
+  version "2.1.0"
+  resolved "https://registry.yarnpkg.com/proxy-compare/-/proxy-compare-2.1.0.tgz#5f99b3ed6a265135ce7ec145ce304e6f89b6511b"
+  integrity sha512-wapJ3h/w8fRSyPEG0y2WMV+tf9xwvj3nxM6aHVuPEOwKs/t5xLSKZb44ubNTiqq2T6lmEMHEWGMTaU2L6ddaFA==
+
+proxy-memoize@^0.3.8:
+  version "0.3.8"
+  resolved "https://registry.yarnpkg.com/proxy-memoize/-/proxy-memoize-0.3.8.tgz#31048786cdcb7224a66f1136bc42b7115c01b4ff"
+  integrity sha512-3PuBf1DWD2E+Xu0NC/sp5WX5WHsLGOuR/tEaGJ0nDpdvk+pjK9YwWaGGa7ilu8WXKWXtNJN4QtrBLLlxD6//ZQ==
+  dependencies:
+    proxy-compare "2.1.0"
+
 punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.yarnpkg.com/punycode/-/punycode-2.1.1.tgz#b58b010ac40c22c5657616c8d2c2c02c7bf479ec"
