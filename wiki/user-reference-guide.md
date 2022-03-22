@@ -276,3 +276,20 @@ const error = firestoreRedux.selectors.queryError(state, id);
 ##### returns
 
 - `(Object)` e.g. `{ code, message }`
+
+### `firestoreRedux.selectors.queriesByRequester`
+
+Gets queries by requesterId.
+
+```JS
+const error = firestoreRedux.selectors.queriesByRequester({state, requesterId});
+```
+
+##### Arguments
+
+- `state (Object)` Redux state.
+- `requesterId (String)` Requester ID
+
+##### returns
+
+- `(Array)` e.g. `[$query1, $query2, ...]`
