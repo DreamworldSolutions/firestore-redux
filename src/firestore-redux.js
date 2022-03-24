@@ -221,6 +221,6 @@ class FirestoreRedux {
 }
 
 const firestoreRedux = new FirestoreRedux();
-
+firestoreRedux.selectors = _selectors;
 export default firestoreRedux;
 export const selectors = _selectors;
