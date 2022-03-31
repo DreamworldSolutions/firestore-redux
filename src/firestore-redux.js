@@ -183,10 +183,10 @@ class FirestoreRedux {
    * @param {String} requesterId Requester Id.
    */
   cancelQueryByRequester(requesterId) {
-    const liveQueries = _selectors.liveQueriesByRequester(
-      this.store.getState(),
-      requesterId
-    );
+    const liveQueries = _selectors.liveQueriesByRequester({
+      state: this.store.getState(),
+      requesterId,
+    });
     forEach(liveQueries, (id) => {
       this.__cancel(id);
     });
@@ -224,3 +224,10 @@ const firestoreRedux = new FirestoreRedux();
 firestoreRedux.selectors = _selectors;
 export default firestoreRedux;
 export const selectors = _selectors;
+export const init = firestoreRedux.init;
+export const query = firestoreRedux.query;
+export const getDocById = firestoreRedux.getDocById;
+export const save = firestoreRedux.save;
+export const deleteDoc = firestoreRedux.delete;
+export const cancelQuery = firestoreRedux.cancelQuery;
+export const cancelQueryByRequester = firestoreRedux.cancelQueryByRequester;

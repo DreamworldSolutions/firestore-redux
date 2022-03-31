@@ -2,7 +2,6 @@ import get from "lodash-es/get";
 import values from "lodash-es/values";
 import filter from "lodash-es/filter";
 import forEach from "lodash-es/forEach";
-import { createSelector } from "reselect";
 import memoize from "proxy-memoize";
 
 /**
@@ -14,47 +13,32 @@ import memoize from "proxy-memoize";
 export const doc = (state, collection, docId) =>
   get(state, `firestore.docs.${collection}.${docId}`);
 
-let allDocsFactoryCache = {};
 /**
- * @param {String} collection Collection Id
+ * @param0
+ *  @property {Object} state Redux state.
+ *  @property {collection} collection Collection / Subcollection ID.
  * @returns {Array} All documents of given collection Id.
  */
-export const allDocsFactory = (collection) => {
-  if (allDocsFactoryCache[collection]) {
-    return allDocsFactoryCache[collection];
-  }
-  allDocsFactoryCache[collection] = createSelector(
-    (state) => get(state, `firestore.docs.${collection}`),
-    (docs) => {
-      return values(docs);
-    }
-  );
-  return allDocsFactoryCache[collection];
-};
+export const allDocs = memoize(({ state, collection }) => {
+  const docs = get(state, `firestore.docs.${collection}`);
+  return values(docs);
+});
 
-let docsByQueryFactoryCache = {};
 /**
- * @param {String} queryId Query Id
+ * @param0
+ *  @property {Object} state Redux state.
+ *  @property {String} queryId Query Id
  * @returns {Array} All documents of given query Id.
  */
-export const docsByQueryFactory = (queryId, collection) => {
-  if (docsByQueryFactoryCache[queryId]) {
-    return docsByQueryFactoryCache[queryId];
-  }
-
-  docsByQueryFactoryCache[queryId] = createSelector(
-    (state) => get(state, `firestore.queries.${queryId}.result`),
-    (state) => get(state, `firestore.docs.${collection}`),
-    (result, allDocs) => {
-      let docs = [];
-      forEach(result, (docId) => {
-        allDocs && docs.push(allDocs[docId]);
-      });
-      return docs;
-    }
-  );
-  return docsByQueryFactoryCache[queryId];
-};
+export const docsByQuery = memoize(({ state, queryId }) => {
+  const query = get(state, `firestore.queries.${queryId}`) || {};
+  const allDocs = get(state, `firestore.docs.${query.collection}`);
+  let docs = [];
+  forEach(query.result, (docId) => {
+    allDocs && docs.push(allDocs[docId]);
+  });
+  return docs;
+});
 
 /**
  * @param {Object} state Redux State.
@@ -91,19 +75,16 @@ export const queryResult = (state, id) =>
  * @param {String} requesterId Requester Id
  * @returns {Array} List of LIVE query ids e.g. [$queryId1, queryId2, ...]
  */
-export const liveQueriesByRequester = createSelector(
-  (state, requesterId) => requesterId,
-  (state) => get(state, `firestore.queries`),
-  (requesterId, queries) => {
-    const liveQueries = filter(
-      values(queries),
-      (query) =>
-        (query.status === "LIVE" || query.status === "PENDING") &&
-        query.requesterId === requesterId
-    );
-    return liveQueries.map(({ id }) => id) || [];
-  }
-);
+export const liveQueriesByRequester = memoize(({ state, requesterId }) => {
+  const queries = get(state, `firestore.queries`);
+  const liveQueries = filter(
+    values(queries),
+    (query) =>
+      (query.status === "LIVE" || query.status === "PENDING") &&
+      query.requesterId === requesterId
+  );
+  return liveQueries.map(({ id }) => id) || [];
+});
 
 /**
  * @param {Object} state.

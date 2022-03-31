@@ -24,7 +24,6 @@
     "lodash-es": "^4.17.21",
     "proxy-memoize": "^0.3.8",
     "redux": "^4.1.2",
-    "reselect": "^4.1.5",
     "uuid": "^8.3.2"
   },
   "devDependencies": {

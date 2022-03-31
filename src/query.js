@@ -176,10 +176,10 @@ class Query {
           status: "CLOSED",
         });
 
-        const result = selectors.docsByQueryFactory(id, collection)(
-          this.store.getState(),
-          collection
-        );
+        const result = selectors.docsByQuery({
+          state: this.store.getState(),
+          queryId: id,
+        });
         this._resolve(result);
         if (this._criteria.waitTillSucceed) {
           this._retryResolve(result);
@@ -249,10 +249,10 @@ class Query {
             status: "LIVE",
           });
           if (!queryResolved) {
-            const result = selectors.docsByQueryFactory(
-              id,
-              collection
-            )(this.store.getState());
+            const result = selectors.docsByQuery({
+              state: this.store.getState(),
+              queryId: id,
+            });
             this._resolve(result);
             if (this._criteria.waitTillSucceed) {
               this._retryResolve(result);
@@ -419,7 +419,7 @@ class Query {
           timeout: this.pollingConfig.timeout,
           maxAttempts: this.pollingConfig.maxAttempts,
           factor: 2,
-          maxDelay: 1000
+          maxDelay: 1000,
         }
       );
     } catch (error) {
