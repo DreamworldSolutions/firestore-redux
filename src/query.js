@@ -192,7 +192,7 @@ class Query {
       } else {
         this._retryReject({
           code: "NOT_FOUND",
-          message: "Document not found after retry as well.",
+          message: `Documents not found after retry in collection: ${this._collection}`,
         });
       }
     } catch (error) {
@@ -267,7 +267,7 @@ class Query {
         } else {
           this._retryReject({
             code: "NOT_FOUND",
-            message: "Document not found after retry as well.",
+            message: `Documents not found after retry in collection: ${this._collection}`,
           });
         }
       },
@@ -372,14 +372,16 @@ class Query {
 
     if (!this._criteria.waitTillSucceed) {
       this.__dispatchQueryFailed(error);
-      this._reject(error);
+      this._reject(`${error} for collection: ${this._collection}`);
       return;
     }
 
     if (!this._waiting) {
       this.__retryTillSucceed();
     } else {
-      this._retryReject(error);
+      this._retryReject(
+        `${error} after retry for collection: ${this._collection}`
+      );
     }
   }
 
@@ -424,7 +426,7 @@ class Query {
       );
     } catch (error) {
       this.__dispatchQueryFailed(error);
-      this._reject(error);
+      this._reject(`${error} for collection: ${this._collection}`);
     }
   }
 
