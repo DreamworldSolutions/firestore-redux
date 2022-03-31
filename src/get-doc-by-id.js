@@ -30,7 +30,7 @@ class GetDocById {
    * @param {String} documentId Document ID.
    * @param {Object} options Options. e.g. {requesterId, once, waitTillSucceed }`
    */
-  getDoc(id, collectionPath, documentId, options={}) {
+  getDoc(id, collectionPath, documentId, options = {}) {
     this.id = id;
     this._collectionPath = collectionPath;
     this._documentId = documentId;
@@ -60,7 +60,7 @@ class GetDocById {
     } else {
       this.__getRealTime({ id, collection, pathSegments, documentId });
     }
-    
+
     return new Promise((resolve, reject) => {
       this._retryResolve = resolve;
       this._retryReject = reject;
@@ -131,7 +131,7 @@ class GetDocById {
       } else {
         this._retryReject({
           code: "NOT_FOUND",
-          message: "Document not found after retry as well.",
+          message: `Document: ${this._documentId} not found after retry in collection path: ${this._collectionPath}`,
         });
       }
     } catch (error) {
@@ -189,7 +189,7 @@ class GetDocById {
         } else {
           this._retryReject({
             code: "NOT_FOUND",
-            message: "Document not found after retry as well.",
+            message: `Document: ${this._documentId} not found after retry in collection path: ${this._collectionPath}`,
           });
         }
       },
@@ -208,14 +208,18 @@ class GetDocById {
 
     if (!this._options.waitTillSucceed) {
       this.__dispatchQueryFailed(error);
-      this._reject(error);
+      this._reject(
+        `${error} for document: ${this._documentId} in collection path: ${this._collectionPath}`
+      );
       return;
     }
 
     if (!this._waiting) {
       this.__retryTillSucceed();
     } else {
-      this._retryReject(error);
+      this._retryReject(
+        `${error} after retry for document: ${this._documentId} in collection path: ${this._collectionPath}`
+      );
     }
   }
 
@@ -261,12 +265,14 @@ class GetDocById {
           timeout: this.pollingConfig.timeout,
           maxAttempts: this.pollingConfig.maxAttempts,
           factor: 2,
-          maxDelay: 1000
+          maxDelay: 1000,
         }
       );
     } catch (error) {
       this.__dispatchQueryFailed(error);
-      this._reject(error);
+      this._reject(
+        `${error} for document: ${this._documentId} in collection path: ${this._collectionPath}`
+      );
     }
   }
 
