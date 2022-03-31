@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import * as actions from "./redux/actions";
+import * as _actions from "./redux/actions";
 import * as _selectors from "./redux/selectors";
 import firestoreReducer from "./redux/reducers";
 import { getFirestore } from "firebase/firestore";
@@ -174,7 +174,7 @@ class FirestoreRedux {
     if (!id || !status || (status !== "LIVE" && status !== "PENDING")) {
       return;
     }
-    this.store.dispatch(actions.cancelQuery({ id }));
+    this.store.dispatch(_actions.cancelQuery({ id }));
     this.__cancel(id);
   }
 
@@ -190,7 +190,7 @@ class FirestoreRedux {
     forEach(liveQueries, (id) => {
       this.__cancel(id);
     });
-    this.store.dispatch(actions.cancelQuery({ requesterId }));
+    this.store.dispatch(_actions.cancelQuery({ requesterId }));
   }
 
   /**
@@ -222,12 +222,7 @@ class FirestoreRedux {
 
 const firestoreRedux = new FirestoreRedux();
 firestoreRedux.selectors = _selectors;
-export default firestoreRedux;
+firestoreRedux.actions = _actions;
+export const actions = _actions;
 export const selectors = _selectors;
-export const init = firestoreRedux.init;
-export const query = firestoreRedux.query;
-export const getDocById = firestoreRedux.getDocById;
-export const save = firestoreRedux.save;
-export const deleteDoc = firestoreRedux.delete;
-export const cancelQuery = firestoreRedux.cancelQuery;
-export const cancelQueryByRequester = firestoreRedux.cancelQueryByRequester;
+export default firestoreRedux;
