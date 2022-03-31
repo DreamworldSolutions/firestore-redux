@@ -12,8 +12,9 @@ An offline-first + real-time database using Firestore + Redux.
 import { initializeApp } from "firebase/app";
 import firestoreRedux from "@dreamworld/firestore-redux";
 import { store } from "./store.js"; // This is store.js PATH of your application where store is created using `createStore` So replace it if required.
-const firebaseConfig = {}; /* Firebase Configurations. e.g. { "apiKey": "AIzaSyAD9RzBEZ_pzZomgIbyIHo0No4PoFDm2Zc", "authDomain": "friendlyeats-d6aa1.firebaseapp.com", "projectId": "friendlyeats-d6aa1" } */
-const readPollingConfig = { timeout: 30000 , maxAttempts: 20 }; // timeout is in milliseconds.
+const firebaseConfig =
+  {}; /* Firebase Configurations. e.g. { "apiKey": "AIzaSyAD9RzBEZ_pzZomgIbyIHo0No4PoFDm2Zc", "authDomain": "friendlyeats-d6aa1.firebaseapp.com", "projectId": "friendlyeats-d6aa1" } */
+const readPollingConfig = { timeout: 30000, maxAttempts: 20 }; // timeout is in milliseconds.
 const firebaseApp = initializeApp(firebaseConfig);
 firestoreRedux.init({ store, firebaseApp, readPollingConfig });
 ```
@@ -54,13 +55,10 @@ try {
 }
 
 // Result can be retrieved from the redux state directly through selector factory.
-const docsByQuerySelector =
-  firestoreRedux.selectors.docsByQueryFactory(queryId, collection);
-const docs = docsByQuerySelector(state); // [{id, ...}, {id, ...}, ...]
+const docsByQuery = firestoreRedux.selectors.docsByQuery({ state, queryId }); // [{id, ...}, {id, ...}, ...]
 
 // Get all documents for given collection.
-const allDocsSelector = firestoreRedux.selectors.allDocsFactory(collection);
-const allDocs = allDocsSelector(state); // [{id, ...}, {id, ...}, ...]
+const allDocs = firestoreRedux.selectors.allDocs({ state, collection }); // [{id, ...}, {id, ...}, ...]
 ```
 
 ### Read document by it's ID.

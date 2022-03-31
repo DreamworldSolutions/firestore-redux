@@ -14,7 +14,7 @@ firestoreRedux.init(store, firebaseApp);
 
 - `store (Object)` Redux Store. It is mandatory.
 - `firebaseApp (Object)` Firebase app. It is optional.
-- `readPollingConfig` Configurations for waiting query. This is ignored when `waitTillSucceed` query criteria is not `true`. Default is `{ timeout: 30000, maxAttempts: 20 }`. 
+- `readPollingConfig` Configurations for waiting query. This is ignored when `waitTillSucceed` query criteria is not `true`. Default is `{ timeout: 30000, maxAttempts: 20 }`.
 
 ##### returns
 
@@ -193,34 +193,35 @@ const doc = firestoreRedux.selectors.doc(state, collection, docId);
 
 - `(Object)` e.g. `{ id, firstName, lastName, profilePic }`
 
-### `firestoreRedux.selectors.allDocsFactory`
+### `firestoreRedux.selectors.allDocs`
 
 Gets all documents of the given collection ID.
 
 ```JS
-const docs = firestoreRedux.selectors.allDocsFactory(collection)(state);
+const docs = firestoreRedux.selectors.allDocs({state, collection});
 ```
 
 ##### Arguments
 
+- `state (Object)` Redux state.
 - `collection (String)` Collection ID.
 
 ##### returns
 
 - `(Array)` e.g. `[ { id, firstName, lastName, profilePic },{ id, firstName, lastName, profilePic }, ... ]`
 
-### `firestoreRedux.selectors.docsByQueryFactory`
+### `firestoreRedux.selectors.docsByQuery`
 
 Gets documents of given collection, based the query result of given queryId.
 
 ```JS
-const docs = firestoreRedux.selectors.docsByQueryFactory(queryId, collection)(state);
+const docs = firestoreRedux.selectors.docsByQuery({state, queryId});
 ```
 
 ##### Arguments
 
+- `state (Object)` Redux state.
 - `queryId (String)` Query ID, from whose documents will be returned.
-- `collection (String)` Collection ID.
 
 ##### returns
 
