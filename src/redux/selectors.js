@@ -22,7 +22,14 @@ export const doc = (state, collection, docId) =>
 export const allDocs = memoize(({ state, collection }) => {
   const docs = get(state, `firestore.docs.${collection}`);
   return values(docs);
-});
+}, { size: 100 });
+
+/**
+ * @param {Object} state Redux state
+ * @param {String} collection Collection / Subcollection ID.
+ * @returns {Object} Hash of whole collection.
+ */
+export const collection = (state, collection) => get(state, `firestore.docs.${collection}`);
 
 /**
  * @param0
@@ -38,7 +45,7 @@ export const docsByQuery = memoize(({ state, queryId }) => {
     allDocs && docs.push(allDocs[docId]);
   });
   return docs;
-});
+}, { size: 500 });
 
 /**
  * @param {Object} state Redux State.
@@ -84,7 +91,7 @@ export const liveQueriesByRequester = memoize(({ state, requesterId }) => {
       query.requesterId === requesterId
   );
   return liveQueries.map(({ id }) => id) || [];
-});
+}, { size: 100 });
 
 /**
  * @param {Object} state.
@@ -93,4 +100,4 @@ export const liveQueriesByRequester = memoize(({ state, requesterId }) => {
  */
 export const queriesByRequester = memoize(({ state, requesterId }) => {
   return filter(get(state, `firestore.queries`), { requesterId });
-});
+}, { size: 100 });

@@ -210,6 +210,23 @@ const docs = firestoreRedux.selectors.allDocs({state, collection});
 
 - `(Array)` e.g. `[ { id, firstName, lastName, profilePic },{ id, firstName, lastName, profilePic }, ... ]`
 
+### `firestoreRedux.selectors.collection`
+
+Gets all documents of the given collection ID.
+
+```JS
+const docs = firestoreRedux.selectors.collection(state, collection);
+```
+
+##### Arguments
+
+- `state (Object)` Redux state.
+- `collection (String)` Collection ID.
+
+##### returns
+
+- `(Object)` e.g. `{ $docId1: $doc1, $docId2: $doc2, ... }`
+
 ### `firestoreRedux.selectors.docsByQuery`
 
 Gets documents of given collection, based the query result of given queryId.
