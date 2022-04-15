@@ -225,7 +225,7 @@ const docs = firestoreRedux.selectors.collection(state, collection);
 
 ##### returns
 
-- `(Object)` e.g. `{ $docId1, $doc1, $docId2: $doc2, ... }`
+- `(Object)` e.g. `{ $docId1: $doc1, $docId2: $doc2, ... }`
 
 ### `firestoreRedux.selectors.docsByQuery`
 
