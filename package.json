@@ -18,13 +18,13 @@
   },
   "homepage": "https://github.com/DreamworldSolutions/firestore-redux#readme",
   "dependencies": {
+    "@dreamworld/uuid-base62": "^1.1.1",
     "@dw/pwa-helpers": "^1.5.2",
     "@lifeomic/attempt": "^3.0.2",
     "firebase": "^9.6.6",
     "lodash-es": "^4.17.21",
     "proxy-memoize": "^0.3.8",
-    "redux": "^4.1.2",
-    "uuid": "^8.3.2"
+    "redux": "^4.1.2"
   },
   "devDependencies": {
     "@dreamworld/dw-button": "^2.1.2",

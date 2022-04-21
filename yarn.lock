@@ -142,6 +142,13 @@
     lodash-es "^4.17.15"
     pwa-helpers "^0.9.1"
 
+"@dreamworld/uuid-base62@^1.1.1":
+  version "1.1.1"
+  resolved "https://registry.yarnpkg.com/@dreamworld/uuid-base62/-/uuid-base62-1.1.1.tgz#d3dacfe9eab94fe06eb0b3717c0c746bad100b70"
+  integrity sha512-5Z5EVK5fYgMvdZLcrtKeWC70lvOThyeA49gjZlM9OpxcgVaxWVWkHY/NUPTYmVfAOyszxJHKePcolWfLUnbXWw==
+  dependencies:
+    uuid "^8.3.2"
+
 "@dreamworld/web-util@^1.2.0":
   version "1.5.0"
   resolved "https://registry.yarnpkg.com/@dreamworld/web-util/-/web-util-1.5.0.tgz#a50a7a64035d4f841df4763aeb14a02f61161dd4"
