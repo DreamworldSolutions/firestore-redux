@@ -3,7 +3,7 @@ import * as actions from "./redux/actions";
 import { doc as fsDoc, writeBatch } from "firebase/firestore";
 import get from "lodash-es/get";
 import forEach from "lodash-es/forEach";
-import { v4 as uuidv4 } from "uuid";
+import { uuidBase62 } from '@dreamworld/uuid-base62';
 
 class SaveDocs {
   constructor(store, db) {
@@ -31,7 +31,7 @@ class SaveDocs {
     }
     forEach(docs, (doc) => {
       if (!doc.id) {
-        doc.id = uuidv4();
+        doc.id = uuidBase62();
       }
     });
 
