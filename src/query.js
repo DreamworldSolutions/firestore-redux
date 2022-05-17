@@ -159,7 +159,7 @@ class Query {
       snapshot.forEach((doc) => {
         docs.push({
           id: doc.id,
-          data: collection === {...doc.data()},
+          data: {...doc.data()},
           newIndex: i,
           oldIndex: -1,
         });
