@@ -159,7 +159,7 @@ class Query {
       snapshot.forEach((doc) => {
         docs.push({
           id: doc.id,
-          data: doc.data(),
+          data: {...doc.data()},
           newIndex: i,
           oldIndex: -1,
         });
@@ -215,7 +215,7 @@ class Query {
           if (change.type === "added") {
             docs.push({
               id: change.doc.id,
-              data: change.doc.data(),
+              data: {...change.doc.data()},
               newIndex: change.newIndex,
               oldIndex: change.oldIndex,
             });
@@ -223,7 +223,7 @@ class Query {
           if (change.type === "modified") {
             docs.push({
               id: change.doc.id,
-              data: change.doc.data(),
+              data: {...change.doc.data()},
               newIndex: change.newIndex,
               oldIndex: change.oldIndex,
             });
