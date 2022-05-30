@@ -41,6 +41,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       );
       const oldResult = get(oState, `queries.${action.id}.result`, []);
       let newResult = [...oldResult];
+      const allQueries = get(state, 'queries');
       // Updates query result.
       forEach(action.docs, (doc) => {
         if (doc.data) {
@@ -52,7 +53,6 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
           }
         }
         if (doc.newIndex === -1) {
-          const allQueries = get(state, 'queries');
           // When same document exists in another query, do not remove it from redux state.
           const documentExistsInAnotherQueryResult = selectors.isDocumentExistsInAnotherQueryResult({ allQueries, queryId: action.id, collection: action.collection, docId: doc.id });
           if (!documentExistsInAnotherQueryResult) {
@@ -70,11 +70,18 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
         if (
           !isEqual(doc.data, get(oState, `docs.${action.collection}.${doc.id}`))
         ) {
-          oState = ReduxUtils.replace(
-            oState,
-            `docs.${action.collection}.${doc.id}`,
-            doc.data
-          );
+
+          if (doc.data === undefined) {
+            // When same document exists in another query, do not remove it from redux state.
+            const documentExistsInAnotherQueryResult = selectors.isDocumentExistsInAnotherQueryResult({ allQueries, queryId: action.id, collection: action.collection, docId: doc.id });
+            if (!documentExistsInAnotherQueryResult) {
+              oState = ReduxUtils.replace(
+                oState,
+                `docs.${action.collection}.${doc.id}`,
+                doc.data
+              );
+            }
+          }
         }
       });
       return oState;
