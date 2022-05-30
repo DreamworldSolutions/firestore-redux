@@ -108,7 +108,7 @@ export const queriesByRequester = memoize(({ state, requesterId }) => {
 export const isDocumentExistsInAnotherQueryResult = memoize(({ allQueries, queryId, collection, docId }) => {
   let docIds = [];
   forEach(allQueries, (query, id) => {
-    if (query.collection === collection && id !== queryId && query.result) {
+    if (query.collection === collection && id !== queryId && query.result && query.status === 'LIVE') {
       docIds.push(...query.result);
     }
   });
