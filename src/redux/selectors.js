@@ -101,3 +101,17 @@ export const liveQueriesByRequester = memoize(({ state, requesterId }) => {
 export const queriesByRequester = memoize(({ state, requesterId }) => {
   return filter(get(state, `firestore.queries`), { requesterId });
 }, { size: 100 });
+
+/**
+ * @returns {Boolean} `true` when document exists in another query.
+ */
+export const isDocumentExistsInAnotherQueryResult = memoize(({ allQueries, queryId, collection, docId }) => {
+  let docIds = [];
+  forEach(allQueries, (query, id) => {
+    if (query.collection === collection && id !== queryId && query.result) {
+      docIds.push(...query.result);
+    }
+  });
+
+  return docIds.includes(docId);
+})

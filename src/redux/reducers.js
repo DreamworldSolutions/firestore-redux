@@ -1,5 +1,6 @@
 const INITIAL_STATE = {};
 import * as actions from "./actions";
+import * as selectors from './selectors';
 import isEmpty from "lodash-es/isEmpty";
 import get from "lodash-es/get";
 import forEach from "lodash-es/forEach";
@@ -51,7 +52,12 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
           }
         }
         if (doc.newIndex === -1) {
-          newResult = filter(newResult, (docId) => docId !== doc.id);
+          const allQueries = get(state, 'queries');
+          // When same document exists in another query, do not remove it from redux state.
+          const documentExistsInAnotherQueryResult = selectors.isDocumentExistsInAnotherQueryResult({ allQueries, queryId: action.id, collection: action.collection, docId: doc.id });
+          if (!documentExistsInAnotherQueryResult) {
+            newResult = filter(newResult, (docId) => docId !== doc.id);  
+          }
         }
       });
 
