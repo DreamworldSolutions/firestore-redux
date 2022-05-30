@@ -74,14 +74,16 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
           if (doc.data === undefined) {
             // When same document exists in another query, do not remove it from redux state.
             const documentExistsInAnotherQueryResult = selectors.isDocumentExistsInAnotherQueryResult({ allQueries, queryId: action.id, collection: action.collection, docId: doc.id });
-            if (!documentExistsInAnotherQueryResult) {
-              oState = ReduxUtils.replace(
-                oState,
-                `docs.${action.collection}.${doc.id}`,
-                doc.data
-              );
+            if (documentExistsInAnotherQueryResult) {
+              return;
             }
           }
+
+          oState = ReduxUtils.replace(
+            oState,
+            `docs.${action.collection}.${doc.id}`,
+            doc.data
+          );
         }
       });
       return oState;
