@@ -1623,7 +1623,7 @@ find-replace@^3.0.0:
   dependencies:
     array-back "^3.0.1"
 
-firebase@^9.8.3:
+firebase@^9.6.8:
   version "9.8.3"
   resolved "https://registry.yarnpkg.com/firebase/-/firebase-9.8.3.tgz#63e5664ad4d5740c8db00702fb9b948665f65cbf"
   integrity sha512-PCThy5cFXnbiUtFPJ9vVdcG7wKibOKNR+iuNXf+54xMGJzYb+rM2P8GUqtr2fhVQkfs42uJ6gGKG4soNGkP64w==
