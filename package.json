@@ -21,10 +21,10 @@
     "@dreamworld/uuid-base62": "^1.1.1",
     "@dw/pwa-helpers": "^1.5.2",
     "@lifeomic/attempt": "^3.0.2",
-    "firebase": "^9.6.6",
+    "firebase": "^9.8.3",
     "lodash-es": "^4.17.21",
-    "proxy-memoize": "^0.3.8",
-    "redux": "^4.1.2"
+    "proxy-memoize": "^1.1.0",
+    "redux": "^4.2.0"
   },
   "devDependencies": {
     "@dreamworld/dw-button": "^2.1.2",
