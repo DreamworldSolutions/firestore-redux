@@ -10,10 +10,9 @@ import cloneDeep from "lodash-es/cloneDeep";
 import { ReduxUtils } from "@dw/pwa-helpers/redux-utils";
 
 const firestoreReducer = (state = INITIAL_STATE, action) => {
-  let oState = { ...state };
   switch (action.type) {
     case actions.QUERY:
-      return ReduxUtils.replace(oState, `queries.${action.id}`, {
+      return ReduxUtils.replace(state, `queries.${action.id}`, {
         id: action.id,
         collection: action.collection,
         requesterId: action.requesterId,
@@ -34,12 +33,12 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
 
     case actions.QUERY_SNAPSHOT:
       // Updates query status to LIVE or CLOSED.
-      oState = ReduxUtils.replace(
-        oState,
+      state = ReduxUtils.replace(
+        state,
         `queries.${action.id}.status`,
         action.status
       );
-      const oldResult = get(oState, `queries.${action.id}.result`, []);
+      const oldResult = get(state, `queries.${action.id}.result`, []);
       let newResult = [...oldResult];
       const allQueries = get(state, 'queries');
       // Updates query result.
@@ -56,19 +55,19 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
           // When same document exists in another query, do not remove it from redux state.
           const documentExistsInAnotherQueryResult = selectors.isDocumentExistsInAnotherQueryResult({ allQueries, queryId: action.id, collection: action.collection, docId: doc.id });
           if (!documentExistsInAnotherQueryResult) {
-            newResult = filter(newResult, (docId) => docId !== doc.id);  
+            newResult = filter(newResult, (docId) => docId !== doc.id);
           }
         }
       });
 
-      oState = isEqual(oldResult, newResult)
-        ? oState
-        : ReduxUtils.replace(oState, `queries.${action.id}.result`, newResult);
+      state = isEqual(oldResult, newResult)
+        ? state
+        : ReduxUtils.replace(state, `queries.${action.id}.result`, newResult);
 
       // Updates only those documents which are actually changed.
       forEach(action.docs, (doc) => {
         if (
-          !isEqual(doc.data, get(oState, `docs.${action.collection}.${doc.id}`))
+          !isEqual(doc.data, get(state, `docs.${action.collection}.${doc.id}`))
         ) {
 
           if (doc.data === undefined) {
@@ -79,118 +78,118 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
             }
           }
 
-          oState = ReduxUtils.replace(
-            oState,
+          state = ReduxUtils.replace(
+            state,
             `docs.${action.collection}.${doc.id}`,
             doc.data
           );
         }
       });
-      return oState;
+      return state;
 
     case actions.QUERY_FAILED:
       // Updates query status to `FAILED`
-      oState = ReduxUtils.replace(
-        oState,
+      state = ReduxUtils.replace(
+        state,
         `queries.${action.id}.status`,
         "FAILED"
       );
       // Sets error detail for given query.
-      oState = ReduxUtils.replace(
-        oState,
+      state = ReduxUtils.replace(
+        state,
         `queries.${action.id}.error`,
         action.error
       );
-      return oState;
+      return state;
 
     case actions.CANCEL_QUERY:
-      if (action.id && !isEmpty(get(oState, `queries.${action.id}`))) {
-        oState = ReduxUtils.replace(
-          oState,
+      if (action.id && !isEmpty(get(state, `queries.${action.id}`))) {
+        state = ReduxUtils.replace(
+          state,
           `queries.${action.id}.status`,
           "CLOSED"
         );
-        return oState;
+        return state;
       }
 
       if (action.requesterId) {
-        forEach(get(oState, `queries`), (query, id) => {
+        forEach(get(state, `queries`), (query, id) => {
           if (
             (query.status === "LIVE" || query.status === "PENDING") &&
             query.requesterId === action.requesterId
           ) {
-            oState = ReduxUtils.replace(
-              oState,
+            state = ReduxUtils.replace(
+              state,
               `queries.${id}.status`,
               "CLOSED"
             );
           }
         });
       }
-      return oState;
+      return state;
 
     case actions.SAVE:
       if (!action.options.localWrite) {
-        return oState;
+        return state;
       }
       const docs = cloneDeep(action.docs);
       forEach(docs, (doc) => {
         const pathSegments = action.collectionPath.split("/");
         const collection = pathSegments[pathSegments.length - 1];
         doc._syncPending = true;
-        oState = ReduxUtils.replace(
-          oState,
+        state = ReduxUtils.replace(
+          state,
           `docs.${collection}.${doc.id}`,
           doc
         );
       });
-      return oState;
+      return state;
 
     case actions.SAVE_DONE:
-      return oState;
+      return state;
     case actions.SAVE_FAILED:
       if (!action.options.localWrite) {
-        return oState;
+        return state;
       }
       forEach(action.prevDocs, (doc) => {
-        oState = ReduxUtils.replace(
-          oState,
+        state = ReduxUtils.replace(
+          state,
           `docs.${action.collection}.${doc.id}`,
           doc.newDoc ? undefined : doc
         );
       });
-      return oState;
+      return state;
 
     case actions.DELETE:
       if (!action.options.localWrite) {
-        return oState;
+        return state;
       }
       forEach(action.docIds, (docId) => {
         const pathSegments = action.collectionPath.split("/");
         const collection = pathSegments[pathSegments.length - 1];
-        oState = ReduxUtils.replace(
-          oState,
+        state = ReduxUtils.replace(
+          state,
           `docs.${collection}.${docId}`,
           undefined
         );
       });
-      return oState;
+      return state;
     case actions.DELETE_DONE:
-      return oState;
+      return state;
     case actions.DELETE_FAILED:
       if (!action.options.localWrite) {
-        return oState;
+        return state;
       }
       forEach(action.prevDocs, (doc) => {
-        oState = ReduxUtils.replace(
-          oState,
+        state = ReduxUtils.replace(
+          state,
           `docs.${action.collection}.${doc.id}`,
           doc
         );
       });
-      return oState;
+      return state;
     default:
-      return oState;
+      return state;
   }
 };
 
