@@ -210,14 +210,13 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       forEach(action.docIds, (docId) => {
         const pathSegments = action.collectionPath.split("/");
         const collection = pathSegments[pathSegments.length - 1];
+        const data = cloneDeep(state.docs[collection]);
+        delete data[docId];
         state = {
           ...state,
           docs: {
             ...state.docs,
-            [collection]: {
-              ...state.docs[collection],
-              [docId]: undefined
-            }
+            [collection]: data
           }
         };
       });
