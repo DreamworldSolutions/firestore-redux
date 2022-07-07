@@ -164,11 +164,10 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       if (!action.options.localWrite) {
         return state;
       }
-      const docs = structuredClone(action.docs);
       forEach(docs, (doc) => {
         const pathSegments = action.collectionPath.split("/");
         const collection = pathSegments[pathSegments.length - 1];
-        doc._syncPending = true;
+        doc = { ...doc, _syncPending: true };
         state = {
           ...state,
           docs: {
