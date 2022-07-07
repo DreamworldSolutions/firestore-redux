@@ -6,7 +6,6 @@ import get from "lodash-es/get";
 import forEach from "lodash-es/forEach";
 import isEqual from "lodash-es/isEqual";
 import filter from "lodash-es/filter";
-import cloneDeep from "lodash-es/cloneDeep";
 
 const firestoreReducer = (state = INITIAL_STATE, action) => {
   switch (action.type) {
@@ -165,7 +164,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       if (!action.options.localWrite) {
         return state;
       }
-      const docs = cloneDeep(action.docs);
+      const docs = structuredClone(action.docs);
       forEach(docs, (doc) => {
         const pathSegments = action.collectionPath.split("/");
         const collection = pathSegments[pathSegments.length - 1];
@@ -210,7 +209,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       forEach(action.docIds, (docId) => {
         const pathSegments = action.collectionPath.split("/");
         const collection = pathSegments[pathSegments.length - 1];
-        const data = cloneDeep(state.docs[collection]);
+        const data = structuredClone(state.docs[collection]);
         delete data[docId];
         state = {
           ...state,

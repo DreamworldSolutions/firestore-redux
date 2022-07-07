@@ -1,7 +1,6 @@
 import { html, css, LitElement, unsafeCSS } from "lit";
 import { connect } from "@dreamworld/pwa-helpers/connect-mixin";
 import isEmpty from "lodash-es/isEmpty";
-import cloneDeep from "lodash-es/cloneDeep";
 import { store } from "./store";
 import firestoreRedux from "../src/firestore-redux";
 import { initializeApp } from "firebase/app";
@@ -525,7 +524,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
       return;
     }
 
-    const query = cloneDeep(this._query);
+    const query = structuredClone(this._query);
     query.where = this._query.where && JSON.parse(this._query.where);
     query.orderBy = this._query.orderBy && JSON.parse(this._query.orderBy);
     try {
