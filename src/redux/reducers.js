@@ -164,7 +164,8 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       if (!action.options.localWrite) {
         return state;
       }
-      const docs = action.docs;
+      state = { ...state };
+      const docs = [...action.docs];
       forEach(docs, (doc) => {
         const pathSegments = action.collectionPath.split("/");
         const collection = pathSegments[pathSegments.length - 1];
