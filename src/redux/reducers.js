@@ -137,6 +137,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       return state;
 
     case actions.SAVE:
+      return state;
       if (!action.options.localWrite) {
         return state;
       }
@@ -162,6 +163,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
     case actions.SAVE_DONE:
       return state;
     case actions.SAVE_FAILED:
+      return state;
       if (!action.options.localWrite) {
         return state;
       }
@@ -180,6 +182,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       return state;
 
     case actions.DELETE:
+      return state;
       if (!action.options.localWrite) {
         return state;
       }
@@ -200,6 +203,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
     case actions.DELETE_DONE:
       return state;
     case actions.DELETE_FAILED:
+      return state;
       if (!action.options.localWrite) {
         return state;
       }
