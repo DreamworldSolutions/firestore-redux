@@ -5,7 +5,7 @@ import isEmpty from "lodash-es/isEmpty";
 import get from "lodash-es/get";
 import forEach from "lodash-es/forEach";
 import isEqual from "lodash-es/isEqual";
-import filter from "lodash-es/filter";
+import map from 'lodash-es/map';
 
 const firestoreReducer = (state = INITIAL_STATE, action) => {
   switch (action.type) {
@@ -49,26 +49,9 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       };
 
       const oldResult = get(state, `queries.${action.id}.result`, []);
-      let newResult = [...oldResult];
       const allQueries = get(state, 'queries');
       // Updates query result.
-      forEach(action.docs, (doc) => {
-        if (doc.data) {
-          if (doc.newIndex !== -1 && newResult[doc.newIndex] !== doc.id) {
-            if (doc.oldIndex !== -1) {
-              newResult.splice(doc.oldIndex, 1);
-            }
-            newResult.splice(doc.newIndex, 0, doc.id);
-          }
-        }
-        if (doc.newIndex === -1) {
-          // When same document exists in another query, do not remove it from redux state.
-          const documentExistsInAnotherQueryResult = selectors.isDocumentExistsInAnotherQueryResult({ allQueries, queryId: action.id, collection: action.collection, docId: doc.id });
-          if (!documentExistsInAnotherQueryResult) {
-            newResult = filter(newResult, (docId) => docId !== doc.id);
-          }
-        }
-      });
+      const newResult = map(action.docs, 'id');
 
       if (!isEqual(oldResult, newResult)) {
         state = {
