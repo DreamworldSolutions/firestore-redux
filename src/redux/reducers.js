@@ -53,44 +53,37 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       // Updates query result.
       const newResult = map(action.docs, 'id');
 
-      if (!isEqual(oldResult, newResult)) {
-        state = {
-          ...state,
-          queries: {
-            ...state.queries,
-            [action.id]: {
-              ...state.queries[action.id],
-              result: newResult
-            }
+      state = {
+        ...state,
+        queries: {
+          ...state.queries,
+          [action.id]: {
+            ...state.queries[action.id],
+            result: newResult
           }
-        };
-      }
+        }
+      };
 
       // Updates only those documents which are actually changed.
       forEach(action.docs, (doc) => {
-        if (
-          !isEqual(doc.data, get(state, `docs.${action.collection}.${doc.id}`))
-        ) {
+        if (doc.data === undefined) {
+          // When same document exists in another query, do not remove it from redux state.
+          const documentExistsInAnotherQueryResult = selectors.isDocumentExistsInAnotherQueryResult({ allQueries, queryId: action.id, collection: action.collection, docId: doc.id });
+          if (documentExistsInAnotherQueryResult) {
+            return;
+          }
+        }
 
-          if (doc.data === undefined) {
-            // When same document exists in another query, do not remove it from redux state.
-            const documentExistsInAnotherQueryResult = selectors.isDocumentExistsInAnotherQueryResult({ allQueries, queryId: action.id, collection: action.collection, docId: doc.id });
-            if (documentExistsInAnotherQueryResult) {
-              return;
+        state = {
+          ...state,
+          docs: {
+            ...state.docs,
+            [action.collection]: {
+              ...state.docs[action.collection],
+              [doc.id]: doc.data
             }
           }
-
-          state = {
-            ...state,
-            docs: {
-              ...state.docs,
-              [action.collection]: {
-                ...state.docs[action.collection],
-                [doc.id]: doc.data
-              }
-            }
-          };
-        }
+        };
       });
       return state;
 
