@@ -118,7 +118,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       liveQueriesResult = selectors.liveQueriesResult({ allQueries, collection: action.collection });
       closedQueriesResult = selectors.closedQueriesResult({ allQueries, collection: action.collection });
       const removedDocuments = difference(closedQueriesResult, liveQueriesResult);
-      
+
       forEach(removedDocuments, (docId) => {
         state = {
           ...state,
