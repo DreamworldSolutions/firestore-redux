@@ -5,7 +5,8 @@ import isEmpty from "lodash-es/isEmpty";
 import get from "lodash-es/get";
 import forEach from "lodash-es/forEach";
 import isEqual from "lodash-es/isEqual";
-import filter from "lodash-es/filter";
+import without from "lodash-es/without";
+import difference from "lodash-es/difference";
 import cloneDeep from "lodash-es/cloneDeep";
 
 const firestoreReducer = (state = INITIAL_STATE, action) => {
@@ -37,6 +38,10 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       }
 
     case actions.QUERY_SNAPSHOT:
+      let allQueries = get(state, 'queries');
+      let liveQueriesResult = selectors.liveQueriesResult({ allQueries, collection: action.collection });
+      let closedQueriesResult = selectors.closedQueriesResult({ allQueries, collection: action.collection });
+
       // Updates query status to LIVE or CLOSED.
       state = {
         ...state,
@@ -51,7 +56,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
 
       const oldResult = get(state, `queries.${action.id}.result`, []);
       let newResult = [...oldResult];
-      const allQueries = get(state, 'queries');
+
       // Updates query result.
       forEach(action.docs, (doc) => {
         if (doc.data) {
@@ -62,12 +67,10 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
             newResult.splice(doc.newIndex, 0, doc.id);
           }
         }
-        if (doc.newIndex === -1) {
-          // When same document exists in another query, do not remove it from redux state.
-          const documentExistsInAnotherQueryResult = selectors.isDocumentExistsInAnotherQueryResult({ allQueries, queryId: action.id, collection: action.collection, docId: doc.id });
-          if (!documentExistsInAnotherQueryResult) {
-            newResult = filter(newResult, (docId) => docId !== doc.id);
-          }
+
+        // When document is removed from current query snapshot but same document exists in another query, do not remove it from redux state.
+        if (doc.newIndex === -1 && !liveQueriesResult.includes(doc.id)) {
+          newResult = without(newResult, doc.id);
         }
       });
 
@@ -92,8 +95,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
 
           if (doc.data === undefined) {
             // When same document exists in another query, do not remove it from redux state.
-            const documentExistsInAnotherQueryResult = selectors.isDocumentExistsInAnotherQueryResult({ allQueries, queryId: action.id, collection: action.collection, docId: doc.id });
-            if (documentExistsInAnotherQueryResult) {
+            if (liveQueriesResult.includes(doc.id)) {
               return;
             }
           }
@@ -110,6 +112,25 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
           };
         }
       });
+
+      // Removes documents from the state which exist in CLOSED queries but not in LIVE queries.
+      allQueries = get(state, 'queries');
+      liveQueriesResult = selectors.liveQueriesResult({ allQueries, collection: action.collection });
+      closedQueriesResult = selectors.closedQueriesResult({ allQueries, collection: action.collection });
+      const removedDocuments = difference(closedQueriesResult, liveQueriesResult);
+
+      forEach(removedDocuments, (docId) => {
+        state = {
+          ...state,
+          docs: {
+            ...state.docs,
+            [action.collection]: {
+              ...state.docs[action.collection],
+              [docId]: undefined
+            }
+          }
+        };
+      })
       return state;
 
     case actions.QUERY_FAILED:
