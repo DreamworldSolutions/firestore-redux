@@ -114,7 +114,7 @@ export const liveQueriesResult = memoize(({ allQueries, collection }) => {
     }
   });
   return uniq(docIds);
-})
+});
 
 /**
  * @returns {Array} Closed queries result.
