@@ -39,7 +39,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
 
     case actions.QUERY_SNAPSHOT:
       let allQueries = get(state, 'queries');
-      let liveQueriesResult = selectors.liveQueriesResult({ allQueries, collection: action.collection });
+      let liveQueriesResult = selectors.anotherLiveQueriesResult({ allQueries, collection: action.collection, queryId: action.id });
       let closedQueriesResult = selectors.closedQueriesResult({ allQueries, collection: action.collection });
 
       // Updates query status to LIVE or CLOSED.
@@ -115,7 +115,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
 
       // Removes documents from the state which exist in CLOSED queries but not in LIVE queries.
       allQueries = get(state, 'queries');
-      liveQueriesResult = selectors.liveQueriesResult({ allQueries, collection: action.collection });
+      liveQueriesResult = selectors.anotherLiveQueriesResult({ allQueries, collection: action.collection });
       closedQueriesResult = selectors.closedQueriesResult({ allQueries, collection: action.collection });
       const removedDocuments = difference(closedQueriesResult, liveQueriesResult);
 
