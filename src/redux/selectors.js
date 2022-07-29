@@ -3,6 +3,7 @@ import values from "lodash-es/values";
 import filter from "lodash-es/filter";
 import forEach from "lodash-es/forEach";
 import memoize from "proxy-memoize";
+import uniq from 'lodash-es/uniq';
 
 /**
  * @param {Object} state Redux State.
@@ -103,15 +104,27 @@ export const queriesByRequester = memoize(({ state, requesterId }) => {
 });
 
 /**
- * @returns {Boolean} `true` when document exists in another query.
+ * @returns {Array} uniq document ids of all LIVE queries.
  */
-export const isDocumentExistsInAnotherQueryResult = memoize(({ allQueries, queryId, collection, docId }) => {
+export const liveQueriesResult = memoize(({ allQueries, collection }) => {
   let docIds = [];
-  forEach(allQueries, (query, id) => {
-    if (query.collection === collection && id !== queryId && query.result && query.status === 'LIVE') {
+  forEach(allQueries, (query) => {
+    if (query.collection === collection && query.result && query.status === 'LIVE') {
       docIds.push(...query.result);
     }
   });
+  return uniq(docIds);
+});
 
-  return docIds.includes(docId);
+/**
+ * @returns {Array} Closed queries result.
+ */
+export const closedQueriesResult = memoize(({ allQueries, collection }) => {
+  let docIds = [];
+  forEach(allQueries, (query) => {
+    if (query.collection === collection && query.result && query.status === 'CLOSED' && !query.once) {
+      docIds.push(...query.result);
+    }
+  });
+  return uniq(docIds);
 })
