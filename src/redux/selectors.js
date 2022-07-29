@@ -106,10 +106,10 @@ export const queriesByRequester = memoize(({ state, requesterId }) => {
 /**
  * @returns {Array} uniq document ids of all LIVE queries.
  */
-export const liveQueriesResult = memoize(({ allQueries, collection }) => {
+export const anotherLiveQueriesResult = memoize(({ allQueries, collection, queryId }) => {
   let docIds = [];
   forEach(allQueries, (query) => {
-    if (query.collection === collection && query.result && query.status === 'LIVE') {
+    if (queryId !== query.id && query.collection === collection && query.result && query.status === 'LIVE') {
       docIds.push(...query.result);
     }
   });
@@ -122,7 +122,7 @@ export const liveQueriesResult = memoize(({ allQueries, collection }) => {
 export const closedQueriesResult = memoize(({ allQueries, collection }) => {
   let docIds = [];
   forEach(allQueries, (query) => {
-    if (query.collection === collection && query.result && query.status === 'CLOSED' && !query.once) {
+    if (query.collection === collection && query.result && query.status === 'CLOSED' && !query.once && !query.request.documentId) {
       docIds.push(...query.result);
     }
   });
