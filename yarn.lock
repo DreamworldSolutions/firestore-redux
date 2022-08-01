@@ -158,6 +158,20 @@
     bowser "^2.11.0"
     lodash-es "^4.17.21"
 
+"@dw/pwa-helpers@^1.5.2":
+  version "1.5.2"
+  resolved "https://npm.dreamworld.solutions/repository/npm/@dw/pwa-helpers/-/pwa-helpers-1.5.2.tgz#7b91172627e41271f0825fbf557e5169cd9a24fb"
+  integrity sha512-248Axxn0lR0Sy+Nd/8ZzQyEhaRTiydJTFpvpCsDPlAXx7gJcBfpUwl9gbnDrO0W0xdMRZRZvjSIZde8EIzeUsg==
+  dependencies:
+    "@dreamworld/pwa-helpers" "^1.8.0"
+    "@dw/semver-esm" "^6.1.1"
+    lodash-es "^4.17.11"
+
+"@dw/semver-esm@^6.1.1":
+  version "6.1.1"
+  resolved "https://npm.dreamworld.solutions/repository/npm/@dw/semver-esm/-/semver-esm-6.1.1.tgz#e6ff6144c848f7f143f8ea980e8eda13c80fde3e"
+  integrity sha512-JYOwiKx+A0ze+D1tOltlZQB3poPSMa9qrVwTHhOuIoWdiXQUGDvvy9n6YWijp9ZHEU8hv1BdeMfFJY12DIBPQg==
+
 "@firebase/analytics-compat@0.1.11":
   version "0.1.11"
   resolved "https://registry.yarnpkg.com/@firebase/analytics-compat/-/analytics-compat-0.1.11.tgz#0dd12c628e063bba2851b4da57fe67024c52ae2d"
@@ -2001,7 +2015,7 @@ lit@^2.0.0, lit@^2.1.2:
     lit-element "^3.2.0"
     lit-html "^2.2.0"
 
-lodash-es@^4.17.15, lodash-es@^4.17.21:
+lodash-es@^4.17.11, lodash-es@^4.17.15, lodash-es@^4.17.21:
   version "4.17.21"
   resolved "https://registry.yarnpkg.com/lodash-es/-/lodash-es-4.17.21.tgz#43e626c46e6591b7750beb2b50117390c609e3ee"
   integrity sha512-mKnC+QJ9pWVzv+C4/U3rRsHapFfHvQFoFB92e52xeyGMcX6/OlIl78je1u8vePzYZSkkogMPJ2yjxxsb89cxyw==
