@@ -8,6 +8,7 @@ import isEqual from "lodash-es/isEqual";
 import without from "lodash-es/without";
 import difference from "lodash-es/difference";
 import cloneDeep from "lodash-es/cloneDeep";
+import { ReduxUtils } from '@dw/pwa-helpers/redux-utils';
 
 const firestoreReducer = (state = INITIAL_STATE, action) => {
   switch (action.type) {
@@ -43,16 +44,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       let closedQueriesResult = selectors.closedQueriesResult({ allQueries, collection: action.collection });
 
       // Updates query status to LIVE or CLOSED.
-      state = {
-        ...state,
-        queries: {
-          ...state.queries,
-          [action.id]: {
-            ...state.queries[action.id],
-            status: action.status
-          }
-        }
-      };
+      state = ReduxUtils.replace(state, `queries.${action.id}.status`, action.status);
 
       const oldResult = get(state, `queries.${action.id}.result`, []);
       let newResult = [...oldResult];
@@ -75,16 +67,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       });
 
       if (!isEqual(oldResult, newResult)) {
-        state = {
-          ...state,
-          queries: {
-            ...state.queries,
-            [action.id]: {
-              ...state.queries[action.id],
-              result: newResult
-            }
-          }
-        };
+        state = ReduxUtils.replace(state, `queries.${action.id}.result`, newResult);
       }
 
       // Updates only those documents which are actually changed.
@@ -100,16 +83,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
             }
           }
 
-          state = {
-            ...state,
-            docs: {
-              ...state.docs,
-              [action.collection]: {
-                ...state.docs[action.collection],
-                [doc.id]: doc.data
-              }
-            }
-          };
+          state = ReduxUtils.replace(state, `docs.${action.collection}.${doc.id}`, doc.data);
         }
       });
 
@@ -120,45 +94,18 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       const removedDocuments = difference(closedQueriesResult, liveQueriesResult);
 
       forEach(removedDocuments, (docId) => {
-        state = {
-          ...state,
-          docs: {
-            ...state.docs,
-            [action.collection]: {
-              ...state.docs[action.collection],
-              [docId]: undefined
-            }
-          }
-        };
+        state = ReduxUtils.replace(state, `docs.${action.collection}.${docId}`, undefined);
       })
       return state;
 
     case actions.QUERY_FAILED:
       // Updates query status to `FAILED` * sets error details in state.
-      return {
-        ...state,
-        queries: {
-          ...state.queries,
-          [action.id]: {
-            ...state.queries[action.id],
-            status: 'FAILED',
-            error: action.error
-          }
-        }
-      }
+      state = ReduxUtils.replace(state, `queries.${action.id}.status`, 'FAILED');
+      return ReduxUtils.replace(state, `queries.${action.id}.error`, action.error);
 
     case actions.CANCEL_QUERY:
       if (action.id && !isEmpty(get(state, `queries.${action.id}`))) {
-        return {
-          ...state,
-          queries: {
-            ...state.queries,
-            [action.id]: {
-              ...state.queries[action.id],
-              status: 'CLOSED'
-            }
-          }
-        }
+        return ReduxUtils.replace(state, `queries.${action.id}.status`, 'CLOSED');
       }
 
       if (action.requesterId) {
@@ -167,16 +114,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
             (query.status === "LIVE" || query.status === "PENDING") &&
             query.requesterId === action.requesterId
           ) {
-            state = {
-              ...state,
-              queries: {
-                ...state.queries,
-                [id]: {
-                  ...state.queries[id],
-                  status: 'CLOSED'
-                }
-              }
-            };
+            state = ReduxUtils.replace(state, `queries.${id}.status`, 'CLOSED');
           }
         });
       }
@@ -191,16 +129,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
         const pathSegments = action.collectionPath.split("/");
         const collection = pathSegments[pathSegments.length - 1];
         doc._syncPending = true;
-        state = {
-          ...state,
-          docs: {
-            ...state.docs,
-            [collection]: {
-              ...state.docs[collection],
-              [doc.id]: doc
-            }
-          }
-        };
+        state = ReduxUtils.replace(state, `docs.${collection}.${doc.id}`, doc);
       });
       return state;
 
@@ -211,16 +140,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
         return state;
       }
       forEach(action.prevDocs, (doc) => {
-        state = {
-          ...state,
-          docs: {
-            ...state.docs,
-            [action.collection]: {
-              ...state.docs[action.collection],
-              [doc.id]: doc.newDoc ? undefined : doc
-            }
-          }
-        };
+        state = ReduxUtils.replace(state, `docs.${action.collection}.${doc.id}`, doc.newDoc ? undefined : doc);
       });
       return state;
 
@@ -231,15 +151,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       forEach(action.docIds, (docId) => {
         const pathSegments = action.collectionPath.split("/");
         const collection = pathSegments[pathSegments.length - 1];
-        const data = cloneDeep(state.docs[collection]);
-        delete data[docId];
-        state = {
-          ...state,
-          docs: {
-            ...state.docs,
-            [collection]: data
-          }
-        };
+        state = ReduxUtils.replace(state, `docs.${collection}.${docId}`, undefined);
       });
       return state;
     case actions.DELETE_DONE:
@@ -249,16 +161,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
         return state;
       }
       forEach(action.prevDocs, (doc) => {
-        state = {
-          ...state,
-          docs: {
-            ...state.docs,
-            [action.collection]: {
-              ...state.docs[action.collection],
-              [doc.id]: doc
-            }
-          }
-        };
+        state = ReduxUtils.replace(state, `docs.${action.collection}.${doc.id}`, doc);
       });
       return state;
     default:
