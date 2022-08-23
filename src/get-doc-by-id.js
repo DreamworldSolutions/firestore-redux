@@ -101,7 +101,7 @@ class GetDocById {
         const docs = [
           {
             id: doc.id,
-            data: {...doc.data()},
+            data: doc.data() || null,
             newIndex: 0,
             oldIndex: -1,
           },
@@ -156,7 +156,7 @@ class GetDocById {
           const docs = [
             {
               id: doc.id,
-              data: {...doc.data()},
+              data: doc.data() || null,
               newIndex: 0,
               oldIndex: -1,
             },
