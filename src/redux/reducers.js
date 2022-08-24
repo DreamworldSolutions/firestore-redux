@@ -61,7 +61,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
         }
 
         // When document is removed from current query snapshot but same document exists in another query, do not remove it from redux state.
-        if (doc.newIndex === -1 && !liveQueriesResult.includes(doc.id)) {
+        if (doc.newIndex === -1) {
           newResult = without(newResult, doc.id);
         }
       });
