@@ -119,10 +119,10 @@ export const anotherLiveQueriesResult = memoize(({ allQueries, collection, query
 /**
  * @returns {Array} Closed queries result.
  */
-export const closedQueriesResult = memoize(({ allQueries, collection }) => {
+export const closedQueriesResult = memoize(({ allQueries, collection, requesterId }) => {
   let docIds = [];
   forEach(allQueries, (query) => {
-    if (query.collection === collection && query.result && query.status === 'CLOSED' && !query.once && !query.request.documentId) {
+    if (query.collection === collection && query.result && query.status === 'CLOSED' && !query.once && !query.request.documentId && query.requesterId && query.requesterId === requesterId) {
       docIds.push(...query.result);
     }
   });

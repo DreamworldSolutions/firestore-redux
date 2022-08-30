@@ -34,6 +34,7 @@ class GetDocById {
     this.id = id;
     this._collectionPath = collectionPath;
     this._documentId = documentId;
+    this.requesterId = options.requesterId;
     this._options = options;
     const pathSegments = collectionPath.split("/");
     const collection = pathSegments[pathSegments.length - 1];
@@ -112,6 +113,7 @@ class GetDocById {
           collection,
           docs,
           status: "CLOSED",
+          requesterId: this.requesterId
         });
 
         const result = selectors.doc(
@@ -167,6 +169,7 @@ class GetDocById {
             collection,
             docs,
             status: "LIVE",
+            requesterId: this.requesterId
           });
 
           if (!resolved) {
@@ -227,9 +230,9 @@ class GetDocById {
    * Dispatches `FIRESTORE_REDUX_QUERY_SNAPSHOT` redux action.
    * @private
    */
-  __dispatchQuerySnapshot({ id, collection, docs, status }) {
+  __dispatchQuerySnapshot({ id, collection, docs, status, requesterId }) {
     this.store.dispatch(
-      actions._querySnapShot({ id, collection, docs, status })
+      actions._querySnapShot({ id, collection, docs, status, requesterId })
     );
   }
 

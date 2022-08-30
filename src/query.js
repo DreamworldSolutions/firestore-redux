@@ -47,8 +47,8 @@ class Query {
     if (criteria.limit && !this._initialQueryLimit) {
       this._initialQueryLimit = criteria.limit;
     }
-
     const requesterId = criteria.requesterId;
+    this.requesterId = requesterId;
     const where = criteria.where;
     const orderBy = criteria.orderBy;
     const startAt = criteria.startAt;
@@ -174,6 +174,7 @@ class Query {
           collection,
           docs,
           status: "CLOSED",
+          requesterId: this.requesterId
         });
 
         const result = selectors.docsByQuery({
@@ -247,6 +248,7 @@ class Query {
             collection,
             docs,
             status: "LIVE",
+            requesterId: this.requesterId
           });
           if (!queryResolved) {
             const result = selectors.docsByQuery({
@@ -389,9 +391,9 @@ class Query {
    * Dispatches `FIRESTORE_REDUX_QUERY_SNAPSHOT` redux action.
    * @private
    */
-  __dispatchQuerySnapshot({ id, collection, docs, status }) {
+  __dispatchQuerySnapshot({ id, collection, docs, status, requesterId }) {
     this.store.dispatch(
-      actions._querySnapShot({ id, collection, docs, status })
+      actions._querySnapShot({ id, collection, docs, status, requesterId })
     );
   }
 
