@@ -90,7 +90,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       // Removes documents from the state which exist in CLOSED queries but not in LIVE queries.
       allQueries = get(state, 'queries');
       liveQueriesResult = selectors.anotherLiveQueriesResult({ allQueries, collection: action.collection });
-      closedQueriesResult = selectors.closedQueriesResult({ allQueries, collection: action.collection });
+      closedQueriesResult = selectors.closedQueriesResult({ allQueries, collection: action.collection, requesterId: action.requesterId });
       const removedDocuments = difference(closedQueriesResult, liveQueriesResult);
 
       forEach(removedDocuments, (docId) => {
