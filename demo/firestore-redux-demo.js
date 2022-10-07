@@ -1,18 +1,7 @@
-import { html, css, LitElement, unsafeCSS } from "lit";
+import { LitElement, html, css } from '@dreamworld/pwa-helpers/lit.js';
+import { unsafeCSS } from 'lit/directives/unsafe-html.js';
 import { connect } from "@dreamworld/pwa-helpers/connect-mixin";
-import isEmpty from "lodash-es/isEmpty";
-import cloneDeep from "lodash-es/cloneDeep";
-import { store } from "./store";
-import firestoreRedux from "../src/firestore-redux";
-import { initializeApp } from "firebase/app";
-import "@dreamworld/dw-input/dw-textarea";
-import "@dreamworld/dw-input/dw-input";
-import "@dreamworld/dw-switch/dw-switch";
-import "@dreamworld/dw-button/dw-button";
-import "@dreamworld/dw-radio-button/dw-radio-group";
-import "@dreamworld/dw-radio-button/dw-radio-button";
-import { Shadow } from "@dreamworld/material-styles/shadow";
-import * as typographyLiterals from "@dreamworld/material-styles/typography-literals";
+
 
 export class FirestoreReduxDemo extends connect(store)(LitElement) {
   static styles = [
