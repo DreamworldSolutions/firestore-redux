@@ -45,3 +45,14 @@
 10. Should We give support for transaction to save & delete documents?
    - **No, there is no need to give this support for now. As per this [documentation](https://firebase.google.com/docs/firestore/manage-data/transactions#batched-writes)**
       > If you do not need to read any documents in your operation set, you can execute multiple write operations as a single batch that contains any combination of set(), update(), or delete() operations.
+
+11. Document based query observations:
+   - When user has permission on document.
+      - When document exists, returns document.
+      - When document doesn't exist, returns `null`.
+   - When user has no permission:
+      - When document exists, gives `[code=permission-denied]: Missing or insufficient permissions.` error.
+      - When document doesn't exists, 
+         - When `resource == null` is allowed in security rules, returns `null`
+         - otherwise, throws `[code=permission-denied]: Missing or insufficient permissions.` error.
+   - When 1 of the document has no permission, it throws `[code=permission-denied]: Missing or insufficient permissions.` error. 
