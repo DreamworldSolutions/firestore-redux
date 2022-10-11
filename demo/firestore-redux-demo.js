@@ -1,7 +1,5 @@
-import { LitElement, html, css } from '@dreamworld/pwa-helpers/lit.js';
-import { unsafeCSS } from 'lit/directives/unsafe-html.js';
+import { LitElement, html, css, unsafeCSS } from '@dreamworld/pwa-helpers/lit.js';
 import { connect } from "@dreamworld/pwa-helpers/connect-mixin";
-import isEmpty from "lodash-es/isEmpty";
 import cloneDeep from "lodash-es/cloneDeep";
 import { store } from "./store";
 import firestoreRedux from "../src/firestore-redux";
