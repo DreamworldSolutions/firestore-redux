@@ -1,6 +1,6 @@
 ## Standard practices
 
-- When user reads document on which security rules is applied based on current document's field & that document doesn't exists, firebase gives `[code=permission-denied]: Missing or insufficient permissions.` error. So to allow read such non-exist document add `resource == null` checker in firestore security rules. [See Reference](https://stackoverflow.com/questions/67059320/what-is-the-proper-way-to-handle-permission-denied-when-a-firestore-document-d) <br/>
+- When user reads document on which security rules is applied based on current document's field & that document doesn't exist, firebase gives `[code=permission-denied]: Missing or insufficient permissions.` error. So to allow read such non-exist document add `resource == null` checker in firestore security rules. [See Reference](https://stackoverflow.com/questions/67059320/what-is-the-proper-way-to-handle-permission-denied-when-a-firestore-document-d) <br/>
 
   e.g
 
