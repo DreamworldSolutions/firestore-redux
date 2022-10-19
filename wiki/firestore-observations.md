@@ -38,10 +38,29 @@
 
    - **There is no default limit. By default, a query retrieves all documents that satisfy the query in ascending order by document ID. You can specify the sort order for your data using orderBy(), and you can limit the number of documents retrieved using limit().**
 
-
 9. Can We get documents by its ids?
+
    - **At persent, firestore's javascript SDK has no such way to fetch documents by ids.**
 
 10. Should We give support for transaction to save & delete documents?
-   - **No, there is no need to give this support for now. As per this [documentation](https://firebase.google.com/docs/firestore/manage-data/transactions#batched-writes)**
-      > If you do not need to read any documents in your operation set, you can execute multiple write operations as a single batch that contains any combination of set(), update(), or delete() operations.
+
+- **No, there is no need to give this support for now. As per this [documentation](https://firebase.google.com/docs/firestore/manage-data/transactions#batched-writes)**
+  > If you do not need to read any documents in your operation set, you can execute multiple write operations as a single batch that contains any combination of set(), update(), or delete() operations.
+
+11. Get Document by Id observations:
+
+- When user has permission on document.
+  - When document exists, returns document.
+  - When document doesn't exist, returns `null`.
+- When user has no permission:
+  - When document exists, gives `[code=permission-denied]: Missing or insufficient permissions.` error.
+  - When document doesn't exist,
+    - When `resource == null` is allowed in security rules, returns `null`
+    - otherwise, throws `[code=permission-denied]: Missing or insufficient permissions.` error.
+
+12. Document based query observations.
+
+- When user queries for 10 documents & on all she has permission,
+   - It gives documents.
+- When she has no permission on 3 of the 10 documents,
+   - It throws `[code=permission-denied]: Missing or insufficient permissions.` error.

@@ -18,8 +18,8 @@
   },
   "homepage": "https://github.com/DreamworldSolutions/firestore-redux#readme",
   "dependencies": {
+    "@dreamworld/pwa-helpers": "^1.14.0",
     "@dreamworld/uuid-base62": "^1.1.1",
-    "@dw/pwa-helpers": "^1.5.2",
     "@lifeomic/attempt": "^3.0.2",
     "firebase": "^9.6.8",
     "lodash-es": "^4.17.21",
@@ -27,15 +27,13 @@
     "redux": "^4.2.0"
   },
   "devDependencies": {
-    "@dreamworld/dw-button": "^2.1.2",
-    "@dreamworld/dw-input": "^2.3.1",
-    "@dreamworld/dw-radio-button": "^3.0.0",
-    "@dreamworld/dw-switch": "^2.1.0",
-    "@dreamworld/material-styles": "^2.0.0",
-    "@dreamworld/pwa-helpers": "^1.11.1",
+    "@dreamworld/dw-button": "^3.0.0",
+    "@dreamworld/dw-input": "^3.0.0",
+    "@dreamworld/dw-radio-button": "^4.0.0",
+    "@dreamworld/dw-switch": "^3.0.0",
+    "@dreamworld/material-styles": "^3.1.0",
     "@rollup/plugin-commonjs": "^21.0.1",
-    "@web/dev-server": "^0.1.29",
-    "lit": "^2.1.2"
+    "@web/dev-server": "^0.1.34"
   },
   "publishConfig": {
     "access": "public"

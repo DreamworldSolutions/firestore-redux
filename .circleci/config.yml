@@ -1,48 +1,11 @@
 version: 2
 jobs:
-  merge-to-development:
-    machine: true
-    steps:
-      - run:
-          name: Clone Repository
-          working_directory: ~/workdir
-          command: |
-            echo "PR IS::"
-            echo $CIRCLE_PULL_REQUEST
-            if [[ -n ${CIRCLE_PULL_REQUEST} ]]
-            then
-              git clone https://${GH_TOKEN}@github.com/DreamworldSolutions/$CIRCLE_PROJECT_REPONAME.git  my-repo
-            else
-              echo "No PR Attached, so not doing anything"
-            fi
-      - run:
-          name: Merge PR branch to development
-          working_directory: ~/workdir/my-repo
-          command: |
-            if [[ -n ${CIRCLE_PULL_REQUEST} ]]
-            then
-              # circleci has 2.14.x as of now!
-              git --version
-              git config credential.helper 'cache --timeout=120'
-              git config user.email "dw-devops@dreamworld.solutions"
-              git config user.name "DW Devops"
-              git remote set-url --push origin https://${GH_TOKEN}@github.com/DreamworldSolutions/$CIRCLE_PROJECT_REPONAME.git
-              (git checkout -b feature/development origin/main || true)
-              (git pull origin feature/development || true)
-              git merge origin/$CIRCLE_BRANCH --no-ff --no-edit
-              git push origin feature/development
-              # Push quietly to prevent showing the token in log
-              git push -q origin feature/development
-            else
-              echo "No PR Attached, so not doing anything."
-            fi
-            
   release-snapshot:
     docker:
-      - image: circleci/node:14
+      - image: circleci/node:lts
     steps:
       - checkout
-      - run: yarn install --frozen-lockfile
+      - run: yarn install --frozen-lockfile --non-interactive
       - run:
           name: Deploy
           command: |
@@ -51,27 +14,17 @@ jobs:
             npx semantic-release
   release:
     docker:
-      - image: circleci/node:14
+      - image: circleci/node:lts
     steps:
       - checkout
-      - run: yarn install --frozen-lockfile
+      - run: yarn install --frozen-lockfile --non-interactive
       - run: echo "Running release job"
       - run:
           name: Deploy
           command: npx semantic-release
 
-
 workflows:
   version: 2
-  merge-to-development:
-    jobs:
-      - merge-to-development:
-          context: Dreamworld
-          filters:
-            branches:
-              ignore:
-                - main
-                - feature/development
   release:
     jobs:
       - release-snapshot:
@@ -79,11 +32,10 @@ workflows:
           filters:
             branches:
               only:
-                - feature/development
+                - /^feature\/.+$/
       - release:
           context: Dreamworld
           filters:
-              branches:
-                only:
-                  - main
-
+            branches:
+              only:
+                - master

@@ -1,6 +1,5 @@
-import { html, css, LitElement, unsafeCSS } from "lit";
+import { LitElement, html, css, unsafeCSS } from '@dreamworld/pwa-helpers/lit.js';
 import { connect } from "@dreamworld/pwa-helpers/connect-mixin";
-import isEmpty from "lodash-es/isEmpty";
 import cloneDeep from "lodash-es/cloneDeep";
 import { store } from "./store";
 import firestoreRedux from "../src/firestore-redux";
@@ -295,15 +294,15 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
         <div class="switch-container row">
           <strong>Once</strong>:
           <dw-switch
-            @change=${(e) => {
-              this._query.once = e.target.checked;
+            @click=${(e) => {
+              this._query.once = e.target.selected;
             }}
           ></dw-switch>
 
           <strong>Wait Till Read Succeed</strong>:
           <dw-switch
-            @change=${(e) => {
-              this._query.waitTillSucceed = e.target.checked;
+            @click=${(e) => {
+              this._query.waitTillSucceed = e.target.selected;
             }}
           ></dw-switch>
         </div>
@@ -353,15 +352,15 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
         <div class="switch-container row">
           <strong>Once</strong>:
           <dw-switch
-            @change=${(e) => {
-              this._singleDocOnce = e.target.checked;
+            @click=${(e) => {
+              this._singleDocOnce = e.target.selected;
             }}
           ></dw-switch>
 
           <strong>Wait Till Read Succeed</strong>:
           <dw-switch
-            @change=${(e) => {
-              this._singleDocwaitTillSucceed = e.target.checked;
+            @click=${(e) => {
+              this._singleDocwaitTillSucceed = e.target.selected;
             }}
           ></dw-switch>
         </div>
@@ -432,15 +431,15 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
             <strong>Local Write</strong>
             <dw-switch
               ?checked=${this._saveLocal}
-              @change=${(e) => {
-                this._saveLocal = e.target.checked;
+              @click=${(e) => {
+                this._saveLocal = e.target.selected;
               }}
             ></dw-switch>
             <strong>Remote Write</strong>
             <dw-switch
               ?checked=${this._saveRemote}
-              @change=${(e) => {
-                this._saveRemote = e.target.checked;
+              @click=${(e) => {
+                this._saveRemote = e.target.selected;
               }}
             ></dw-switch>
           </div>
@@ -470,15 +469,15 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
             <strong>Local Delete</strong>
             <dw-switch
               ?checked=${this._deleteLocal}
-              @change=${(e) => {
-                this._deleteLocal = e.target.checked;
+              @click=${(e) => {
+                this._deleteLocal = e.target.selected;
               }}
             ></dw-switch>
             <strong>Remote Delete</strong>
             <dw-switch
               ?checked=${this._deleteRemote}
-              @change=${(e) => {
-                this._deleteRemote = e.target.checked;
+              @click=${(e) => {
+                this._deleteRemote = e.target.selected;
               }}
             ></dw-switch>
           </div>
