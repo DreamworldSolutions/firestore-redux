@@ -8,7 +8,7 @@ import isEqual from "lodash-es/isEqual";
 import without from "lodash-es/without";
 import difference from "lodash-es/difference";
 import cloneDeep from "lodash-es/cloneDeep";
-import { ReduxUtils } from '@dw/pwa-helpers/redux-utils';
+import { ReduxUtils } from '@dreamworld/pwa-helpers/redux-utils';
 
 const firestoreReducer = (state = INITIAL_STATE, action) => {
   switch (action.type) {

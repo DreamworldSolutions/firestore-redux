@@ -18,8 +18,8 @@
   },
   "homepage": "https://github.com/DreamworldSolutions/firestore-redux#readme",
   "dependencies": {
+    "@dreamworld/pwa-helpers": "^1.14.0",
     "@dreamworld/uuid-base62": "^1.1.1",
-    "@dw/pwa-helpers": "^1.5.2",
     "@lifeomic/attempt": "^3.0.2",
     "firebase": "^9.6.8",
     "lodash-es": "^4.17.21",
@@ -27,12 +27,11 @@
     "redux": "^4.2.0"
   },
   "devDependencies": {
-    "@dreamworld/dw-button": "https://github.com/DreamworldSolutions/dw-button.git#feature/upgrade-to-lit",
-    "@dreamworld/dw-input": "https://github.com/DreamworldSolutions/dw-input.git#feature/upgrade-to-lit",
-    "@dreamworld/dw-radio-button": "https://github.com/DreamworldSolutions/dw-radio-button.git#feature/upgrade-to-lit",
-    "@dreamworld/dw-switch": "https://github.com/DreamworldSolutions/dw-switch.git#feature/upgrade-to-lit",
-    "@dreamworld/material-styles": "https://github.com/DreamworldSolutions/material-styles.git#feature/upgrade-to-lit",
-    "@dreamworld/pwa-helpers": "^1.13.1",
+    "@dreamworld/dw-button": "^3.0.0",
+    "@dreamworld/dw-input": "^3.0.0",
+    "@dreamworld/dw-radio-button": "^4.0.0",
+    "@dreamworld/dw-switch": "^3.0.0",
+    "@dreamworld/material-styles": "^3.1.0",
     "@rollup/plugin-commonjs": "^21.0.1",
     "@web/dev-server": "^0.1.34"
   },

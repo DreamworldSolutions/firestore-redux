@@ -30,81 +30,100 @@
   dependencies:
     regenerator-runtime "^0.13.4"
 
-"@dreamworld/dw-button@https://github.com/DreamworldSolutions/dw-button.git#feature/upgrade-to-lit":
-  version "0.0.0-development"
-  resolved "https://github.com/DreamworldSolutions/dw-button.git#4581dca0610d219f0745e912e1b3625a48a6f7c2"
+"@dreamworld/dw-button@^3.0.0":
+  version "3.0.0"
+  resolved "https://registry.yarnpkg.com/@dreamworld/dw-button/-/dw-button-3.0.0.tgz#0fd441b7dafd13efef8f93f0e7bdf2f5efcd38c8"
+  integrity sha512-uiOTu2MjJzltXV+qbavbwAQx5895UVBDS8h7oDsXZb6qrIiXeP+HduySVzd6ItLfy8AEEZs5qxEIzUjrbOL5MQ==
   dependencies:
     "@dreamworld/pwa-helpers" "^1.13.1"
     "@material/mwc-button" "0.27.0"
 
-"@dreamworld/dw-form@https://github.com/DreamworldSolutions/dw-form.git#feature/upgrade-to-lit":
-  version "0.0.0-development"
-  resolved "https://github.com/DreamworldSolutions/dw-form.git#8cfa9d8790052ccd3d5b32b351232f1be4b73c89"
+"@dreamworld/dw-form@^4.0.0":
+  version "4.0.0"
+  resolved "https://registry.yarnpkg.com/@dreamworld/dw-form/-/dw-form-4.0.0.tgz#7fd16502f86d55e17bd634523676fe1cdb4a0482"
+  integrity sha512-o9nsnjkJxpTUhesA/tVp6kCJbQ/nXTD6T34eEPOuWKiaZEuKL4FbzjoKDS9fqhp6cVUMHfm2Q9fwekGiqvMvEA==
   dependencies:
-    "@dreamworld/material-styles" "https://github.com/DreamworldSolutions/material-styles.git#feature/upgrade-to-lit"
+    "@dreamworld/material-styles" "^3.0.0"
     "@dreamworld/pwa-helpers" "^1.13.1"
     lodash-es "^4.17.15"
 
-"@dreamworld/dw-icon-button@https://github.com/DreamworldSolutions/dw-icon-button.git#feature/upgrade-lit":
-  version "1.0.0-init.1"
-  resolved "https://github.com/DreamworldSolutions/dw-icon-button.git#d58bc8d9ab13844d3f525556b4e305c72b299653"
+"@dreamworld/dw-icon-button@^3.0.0":
+  version "3.0.0"
+  resolved "https://registry.yarnpkg.com/@dreamworld/dw-icon-button/-/dw-icon-button-3.0.0.tgz#b540a13b848da46a50f37d4a83427181f675d119"
+  integrity sha512-8bPtV9GTemgxtf9s0rssxa/9Kx0oc2oLoBGV9YFLg2mrdp18T7GpLljc48h5GxaaFV3m10z7kxDb3JY6WQvATQ==
   dependencies:
-    "@dreamworld/dw-icon" "https://github.com/DreamworldSolutions/dw-icon.git#feature/upgrade-to-lit"
-    "@dreamworld/dw-tooltip" "https://github.com/DreamworldSolutions/dw-tooltip.git#feature/upgrade-to-lit"
+    "@dreamworld/dw-icon" "^4.0.0"
+    "@dreamworld/dw-tooltip" "^3.0.0"
     "@dreamworld/pwa-helpers" "^1.13.1"
     "@dreamworld/web-util" "^1.2.0"
     "@material/mwc-base" "0.27.0"
 
-"@dreamworld/dw-icon@https://github.com/DreamworldSolutions/dw-icon.git#feature/upgrade-to-lit":
-  version "0.0.0-development"
-  resolved "https://github.com/DreamworldSolutions/dw-icon.git#e2ffcd8f516aa5adfa744b225e7840bb8ba0e6ff"
+"@dreamworld/dw-icon@^4.0.0":
+  version "4.0.0"
+  resolved "https://registry.yarnpkg.com/@dreamworld/dw-icon/-/dw-icon-4.0.0.tgz#c43a3d3ef92c0d80744a6d2d4a08f0d647af142d"
+  integrity sha512-pWEZu9Fkp+YYSIQ58WNJQ1iJvXQmS1Mvtz1a+AOxWPAS47TWU//SE7yV1cenOAd+Kw44IOkdlzuDbKZiw58VdA==
   dependencies:
     "@dreamworld/pwa-helpers" "^1.13.1"
     "@material/mwc-icon" "0.27.0"
 
-"@dreamworld/dw-input@https://github.com/DreamworldSolutions/dw-input.git#feature/upgrade-to-lit":
-  version "0.0.0-development"
-  resolved "https://github.com/DreamworldSolutions/dw-input.git#f1b877f7affe9ee4dee44f38a725bbd08b3528c1"
+"@dreamworld/dw-input@^3.0.0":
+  version "3.0.0"
+  resolved "https://registry.yarnpkg.com/@dreamworld/dw-input/-/dw-input-3.0.0.tgz#ffae142ba1b7193b9a058994324dfbec8655a1e3"
+  integrity sha512-Q+joVswKhvhpQaw5SqtgxwpnILrWb/4tuQJNHEl9hYbiWB5CaxGvSGWGlr0exMMJLZbRqZ6mx8wnBJvrXxOK4g==
   dependencies:
-    "@dreamworld/dw-form" "https://github.com/DreamworldSolutions/dw-form.git#feature/upgrade-to-lit"
-    "@dreamworld/dw-icon" "https://github.com/DreamworldSolutions/dw-icon.git#feature/upgrade-to-lit"
-    "@dreamworld/dw-icon-button" "https://github.com/DreamworldSolutions/dw-icon-button.git#feature/upgrade-lit"
-    "@dreamworld/material-styles" "https://github.com/DreamworldSolutions/material-styles.git#feature/upgrade-to-lit"
+    "@dreamworld/dw-form" "^4.0.0"
+    "@dreamworld/dw-icon" "^4.0.0"
+    "@dreamworld/dw-icon-button" "^3.0.0"
     "@material/textfield" "^14.0.0"
 
-"@dreamworld/dw-radio-button@https://github.com/DreamworldSolutions/dw-radio-button.git#feature/upgrade-to-lit":
-  version "0.0.0-development"
-  resolved "https://github.com/DreamworldSolutions/dw-radio-button.git#7525678903ea9d22d466b0f46fb6c6526a49d4bc"
+"@dreamworld/dw-radio-button@^4.0.0":
+  version "4.0.0"
+  resolved "https://registry.yarnpkg.com/@dreamworld/dw-radio-button/-/dw-radio-button-4.0.0.tgz#d164a1cb9994e0c8595195ea8b6832e2cc412705"
+  integrity sha512-7dp7CUft/Lz5y6c3zq/9m+FCx5GaqMySHzgJ94rwomN8yzf8MDBHDNcX9tJOCH0XGr/fiCV5Z8pCl9C5wFcxsw==
   dependencies:
-    "@dreamworld/dw-form" "https://github.com/DreamworldSolutions/dw-form.git#feature/upgrade-to-lit"
+    "@dreamworld/dw-form" "^4.0.0"
     "@dreamworld/pwa-helpers" "^1.13.1"
     "@material/mwc-radio" "0.27.0"
 
-"@dreamworld/dw-switch@https://github.com/DreamworldSolutions/dw-switch.git#feature/upgrade-to-lit":
-  version "0.0.0-development"
-  resolved "https://github.com/DreamworldSolutions/dw-switch.git#e2e1e18d409aa445cdc9ebc207dff295ad537ea1"
+"@dreamworld/dw-switch@^3.0.0":
+  version "3.0.0"
+  resolved "https://registry.yarnpkg.com/@dreamworld/dw-switch/-/dw-switch-3.0.0.tgz#3c8202cc38199b67129f24171002e3e74db4dd28"
+  integrity sha512-CZ9QFmr6LGjDfyX82LkhdSC98fQ/Xohy2SiJxfr7hwKfXI+bxlsEkzNxDqmm/bHX6cNb6TPNPJfn0GVnMoCffA==
   dependencies:
     "@dreamworld/pwa-helpers" "^1.13.1"
     "@material/mwc-switch" "0.27.0"
 
-"@dreamworld/dw-tooltip@https://github.com/DreamworldSolutions/dw-tooltip.git#feature/upgrade-to-lit":
-  version "0.0.0-development"
-  resolved "https://github.com/DreamworldSolutions/dw-tooltip.git#bb2b29af58c313aa24f3bdeba164b3e517fdcf09"
+"@dreamworld/dw-tooltip@^3.0.0":
+  version "3.0.0"
+  resolved "https://registry.yarnpkg.com/@dreamworld/dw-tooltip/-/dw-tooltip-3.0.0.tgz#0c4b7398bcf9c80146dbc8d0562c83b0402a5e70"
+  integrity sha512-TwnEQv7J2I85gCCHd+jbLyiz8dIaZInRCmUVx9+61WsasAsOXljY7pNVy9QnMMzHd4/HOr1iiVQdgVzIM7uSAg==
   dependencies:
-    "@dreamworld/material-styles" "https://github.com/DreamworldSolutions/material-styles.git#feature/upgrade-to-lit"
+    "@dreamworld/material-styles" "^3.0.0"
     "@dreamworld/pwa-helpers" "^1.13.1"
     tippy.js "^6.2.7"
 
-"@dreamworld/material-styles@https://github.com/DreamworldSolutions/material-styles.git#feature/upgrade-to-lit":
-  version "0.0.0-development"
-  resolved "https://github.com/DreamworldSolutions/material-styles.git#29c73b0e6e36e882ff081533be7d5d49b48a52f8"
+"@dreamworld/material-styles@^3.0.0", "@dreamworld/material-styles@^3.1.0":
+  version "3.1.0"
+  resolved "https://registry.yarnpkg.com/@dreamworld/material-styles/-/material-styles-3.1.0.tgz#2c1e40e14a94860448b72a3e0ff711ae107514c8"
+  integrity sha512-EaAeHrtYxNUtvNaVGBd7Bw+gWNM9B8GJoceEMeaUxLYJJG55JPqPYM7CW99qwgWm1yaNeG8OmEjYF/D08aqUdg==
   dependencies:
     "@dreamworld/pwa-helpers" "^1.13.1"
 
-"@dreamworld/pwa-helpers@^1.13.1", "@dreamworld/pwa-helpers@^1.8.0":
+"@dreamworld/pwa-helpers@^1.13.1":
   version "1.13.1"
   resolved "https://registry.yarnpkg.com/@dreamworld/pwa-helpers/-/pwa-helpers-1.13.1.tgz#825e6faf1c530591a48b6568996cdbebf8fcacc8"
   integrity sha512-/NHwoVm7cv6w1obkFYNW2ebPc//r4bzp7CjfGKHgzLaKnqt4RwY/n8nCaqzPyaJ4RJH/HnC5zYijN5g3+PhDqw==
+  dependencies:
+    bowser "^2.8.1"
+    lit "^2.3.1"
+    lit-element "^3.2.2"
+    lodash-es "^4.17.21"
+    pwa-helpers "^0.9.1"
+
+"@dreamworld/pwa-helpers@^1.14.0":
+  version "1.14.0"
+  resolved "https://registry.yarnpkg.com/@dreamworld/pwa-helpers/-/pwa-helpers-1.14.0.tgz#8f98663a19913123fa252672bb17847bf38bce8f"
+  integrity sha512-27ReDHmCvQsltjVba4DacXDxyczERNSFV9mCrwEdwfEM0nAqrE8rWo1FlYx1131uMit+azkJk+gOc6ylQzxDZA==
   dependencies:
     bowser "^2.8.1"
     lit "^2.3.1"
@@ -126,20 +145,6 @@
   dependencies:
     bowser "^2.11.0"
     lodash-es "^4.17.21"
-
-"@dw/pwa-helpers@^1.5.2":
-  version "1.5.2"
-  resolved "https://npm.dreamworld.solutions/repository/npm/@dw/pwa-helpers/-/pwa-helpers-1.5.2.tgz#7b91172627e41271f0825fbf557e5169cd9a24fb"
-  integrity sha512-248Axxn0lR0Sy+Nd/8ZzQyEhaRTiydJTFpvpCsDPlAXx7gJcBfpUwl9gbnDrO0W0xdMRZRZvjSIZde8EIzeUsg==
-  dependencies:
-    "@dreamworld/pwa-helpers" "^1.8.0"
-    "@dw/semver-esm" "^6.1.1"
-    lodash-es "^4.17.11"
-
-"@dw/semver-esm@^6.1.1":
-  version "6.1.1"
-  resolved "https://npm.dreamworld.solutions/repository/npm/@dw/semver-esm/-/semver-esm-6.1.1.tgz#e6ff6144c848f7f143f8ea980e8eda13c80fde3e"
-  integrity sha512-JYOwiKx+A0ze+D1tOltlZQB3poPSMa9qrVwTHhOuIoWdiXQUGDvvy9n6YWijp9ZHEU8hv1BdeMfFJY12DIBPQg==
 
 "@firebase/analytics-compat@0.1.11":
   version "0.1.11"
@@ -1972,7 +1977,7 @@ lit@^2.0.0, lit@^2.3.1:
     lit-element "^3.2.0"
     lit-html "^2.4.0"
 
-lodash-es@^4.17.11, lodash-es@^4.17.15, lodash-es@^4.17.21:
+lodash-es@^4.17.15, lodash-es@^4.17.21:
   version "4.17.21"
   resolved "https://registry.yarnpkg.com/lodash-es/-/lodash-es-4.17.21.tgz#43e626c46e6591b7750beb2b50117390c609e3ee"
   integrity sha512-mKnC+QJ9pWVzv+C4/U3rRsHapFfHvQFoFB92e52xeyGMcX6/OlIl78je1u8vePzYZSkkogMPJ2yjxxsb89cxyw==
