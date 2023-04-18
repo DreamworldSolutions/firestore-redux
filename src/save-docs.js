@@ -3,7 +3,7 @@ import * as actions from "./redux/actions.js";
 import { doc as fsDoc, writeBatch } from "firebase/firestore";
 import get from "lodash-es/get.js";
 import forEach from "lodash-es/forEach.js";
-import { uuidBase62 } from '@dreamworld/uuid-base62';
+import { uuidBase62 } from '@dreamworld/uuid-base62/uuid-base62.js';
 
 class SaveDocs {
   constructor(store, db) {
