@@ -1,9 +1,9 @@
-import get from "lodash-es/get";
-import values from "lodash-es/values";
-import filter from "lodash-es/filter";
-import forEach from "lodash-es/forEach";
+import get from "lodash-es/get.js";
+import values from "lodash-es/values.js";
+import filter from "lodash-es/filter.js";
+import forEach from "lodash-es/forEach.js";
 import memoize from "proxy-memoize";
-import uniq from 'lodash-es/uniq';
+import uniq from 'lodash-es/uniq.js';
 
 /**
  * @param {Object} state Redux State.

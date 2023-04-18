@@ -1,17 +1,17 @@
 import { uuidBase62 } from '@dreamworld/uuid-base62';
-import * as _actions from "./redux/actions";
-import * as _selectors from "./redux/selectors";
-import firestoreReducer from "./redux/reducers";
-import { getFirestore } from "firebase/firestore";
-import Query from "./query";
-import GetDocById from "./get-doc-by-id";
-import SaveDocs from "./save-docs";
-import DeleteDocs from "./delete-docs";
-import merge from "lodash-es/merge";
-import forEach from "lodash-es/forEach";
-import isEmpty from "lodash-es/isEmpty";
-import isObject from "lodash-es/isObject";
-import isArray from "lodash-es/isArray";
+import * as _actions from "./redux/actions.js";
+import * as _selectors from "./redux/selectors.js";
+import firestoreReducer from "./redux/reducers.js";
+import { getFirestore } from "firebase/firestore.js";
+import Query from "./query.js";
+import GetDocById from "./get-doc-by-id.js";
+import SaveDocs from "./save-docs.js";
+import DeleteDocs from "./delete-docs.js";
+import merge from "lodash-es/merge.js";
+import forEach from "lodash-es/forEach.js";
+import isEmpty from "lodash-es/isEmpty.js";
+import isObject from "lodash-es/isObject.js";
+import isArray from "lodash-es/isArray.js";
 
 class FirestoreRedux {
   constructor() {
