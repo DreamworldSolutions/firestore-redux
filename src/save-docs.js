@@ -1,9 +1,9 @@
-import isArray from "lodash-es/isArray";
-import * as actions from "./redux/actions";
+import isArray from "lodash-es/isArray.js";
+import * as actions from "./redux/actions.js";
 import { doc as fsDoc, writeBatch } from "firebase/firestore";
-import get from "lodash-es/get";
-import forEach from "lodash-es/forEach";
-import { uuidBase62 } from '@dreamworld/uuid-base62';
+import get from "lodash-es/get.js";
+import forEach from "lodash-es/forEach.js";
+import { uuidBase62 } from '@dreamworld/uuid-base62/uuid-base62.js';
 
 class SaveDocs {
   constructor(store, db) {

@@ -1,5 +1,5 @@
-import * as actions from "./redux/actions";
-import * as selectors from "./redux/selectors";
+import * as actions from "./redux/actions.js";
+import * as selectors from "./redux/selectors.js";
 import {
   doc as fsDoc,
   getDoc as fsGetDoc,

@@ -1,14 +1,14 @@
 const INITIAL_STATE = { queries: {}, docs: {} };
-import * as actions from "./actions";
-import * as selectors from './selectors';
-import isEmpty from "lodash-es/isEmpty";
-import get from "lodash-es/get";
-import forEach from "lodash-es/forEach";
-import isEqual from "lodash-es/isEqual";
-import without from "lodash-es/without";
-import difference from "lodash-es/difference";
-import cloneDeep from "lodash-es/cloneDeep";
-import { ReduxUtils } from '@dreamworld/pwa-helpers/redux-utils';
+import * as actions from "./actions.js";
+import * as selectors from './selectors.js';
+import isEmpty from "lodash-es/isEmpty.js";
+import get from "lodash-es/get.js";
+import forEach from "lodash-es/forEach.js";
+import isEqual from "lodash-es/isEqual.js";
+import without from "lodash-es/without.js";
+import difference from "lodash-es/difference.js";
+import cloneDeep from "lodash-es/cloneDeep.js";
+import { ReduxUtils } from '@dreamworld/pwa-helpers/redux-utils.js';
 
 const firestoreReducer = (state = INITIAL_STATE, action) => {
   switch (action.type) {

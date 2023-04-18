@@ -1,8 +1,8 @@
-import * as actions from "./redux/actions";
-import * as selectors from "./redux/selectors";
-import forEach from "lodash-es/forEach";
-import get from "lodash-es/get";
-import isEmpty from "lodash-es/isEmpty";
+import * as actions from "./redux/actions.js";
+import * as selectors from "./redux/selectors.js";
+import forEach from "lodash-es/forEach.js";
+import get from "lodash-es/get.js";
+import isEmpty from "lodash-es/isEmpty.js";
 import { retry as reAttempt } from "@lifeomic/attempt";
 
 import {

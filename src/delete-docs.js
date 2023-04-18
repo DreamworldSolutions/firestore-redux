@@ -1,7 +1,7 @@
-import * as actions from "./redux/actions";
+import * as actions from "./redux/actions.js";
 import { doc as fsDoc, writeBatch } from "firebase/firestore";
-import forEach from "lodash-es/forEach";
-import get from "lodash-es/get";
+import forEach from "lodash-es/forEach.js";
+import get from "lodash-es/get.js";
 class DeleteDocs {
   constructor(store, db) {
     /**

@@ -1,6 +1,3 @@
-import isObject from "lodash-es/isObject";
-let DB;
-
 export const QUERY = "FIRESTORE_REDUX_QUERY";
 export const QUERY_SNAPSHOT = "FIRESTORE_REDUX_QUERY_SNAPSHOT";
 export const QUERY_FAILED = "FIRESTORE_REDUX_QUERY_FAILED";
