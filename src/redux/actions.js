@@ -68,14 +68,20 @@ export const query = ({
  *  @property {String} status Query Status. When query is for once, it is 'CLOSED' otherwise its 'LIVE'.
  * @private
  */
-export const _querySnapShot = ({ id, collection, docs, status, requesterId }) => {
+export const _querySnapShot = ({
+  id,
+  collection,
+  docs,
+  status,
+  requesterId,
+}) => {
   return {
     type: QUERY_SNAPSHOT,
     id,
     collection,
     docs,
     status,
-    requesterId
+    requesterId,
   };
 };
 

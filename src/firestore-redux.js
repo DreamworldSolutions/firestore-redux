@@ -1,4 +1,4 @@
-import { uuidBase62 } from '@dreamworld/uuid-base62';
+import { uuidBase62 } from "@dreamworld/uuid-base62/uuid-base62.js";
 import * as _actions from "./redux/actions.js";
 import * as _selectors from "./redux/selectors.js";
 import firestoreReducer from "./redux/reducers.js";

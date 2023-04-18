@@ -3,7 +3,7 @@ import values from "lodash-es/values.js";
 import filter from "lodash-es/filter.js";
 import forEach from "lodash-es/forEach.js";
 import memoize from "proxy-memoize";
-import uniq from 'lodash-es/uniq.js';
+import uniq from "lodash-es/uniq.js";
 
 /**
  * @param {Object} state Redux State.
@@ -20,17 +20,21 @@ export const doc = (state, collection, docId) =>
  *  @property {collection} collection Collection / Subcollection ID.
  * @returns {Array} All documents of given collection Id.
  */
-export const allDocs = memoize(({ state, collection }) => {
-  const docs = get(state, `firestore.docs.${collection}`);
-  return values(docs);
-}, { size: 100 });
+export const allDocs = memoize(
+  ({ state, collection }) => {
+    const docs = get(state, `firestore.docs.${collection}`);
+    return values(docs);
+  },
+  { size: 100 }
+);
 
 /**
  * @param {Object} state Redux state
  * @param {String} collection Collection / Subcollection ID.
  * @returns {Object} Hash of whole collection.
  */
-export const collection = (state, collection) => get(state, `firestore.docs.${collection}`);
+export const collection = (state, collection) =>
+  get(state, `firestore.docs.${collection}`);
 
 /**
  * @param0
@@ -38,15 +42,18 @@ export const collection = (state, collection) => get(state, `firestore.docs.${co
  *  @property {String} queryId Query Id
  * @returns {Array} All documents of given query Id.
  */
-export const docsByQuery = memoize(({ state, queryId }) => {
-  const query = get(state, `firestore.queries.${queryId}`) || {};
-  const allDocs = get(state, `firestore.docs.${query.collection}`);
-  let docs = [];
-  forEach(query.result, (docId) => {
-    allDocs && docs.push(allDocs[docId]);
-  });
-  return docs;
-}, { size: 500 });
+export const docsByQuery = memoize(
+  ({ state, queryId }) => {
+    const query = get(state, `firestore.queries.${queryId}`) || {};
+    const allDocs = get(state, `firestore.docs.${query.collection}`);
+    let docs = [];
+    forEach(query.result, (docId) => {
+      allDocs && docs.push(allDocs[docId]);
+    });
+    return docs;
+  },
+  { size: 500 }
+);
 
 /**
  * @param {Object} state Redux State.
@@ -83,16 +90,19 @@ export const queryResult = (state, id) =>
  * @param {String} requesterId Requester Id
  * @returns {Array} List of LIVE query ids e.g. [$queryId1, queryId2, ...]
  */
-export const liveQueriesByRequester = memoize(({ state, requesterId }) => {
-  const queries = get(state, `firestore.queries`);
-  const liveQueries = filter(
-    values(queries),
-    (query) =>
-      (query.status === "LIVE" || query.status === "PENDING") &&
-      query.requesterId === requesterId
-  );
-  return liveQueries.map(({ id }) => id) || [];
-}, { size: 100 });
+export const liveQueriesByRequester = memoize(
+  ({ state, requesterId }) => {
+    const queries = get(state, `firestore.queries`);
+    const liveQueries = filter(
+      values(queries),
+      (query) =>
+        (query.status === "LIVE" || query.status === "PENDING") &&
+        query.requesterId === requesterId
+    );
+    return liveQueries.map(({ id }) => id) || [];
+  },
+  { size: 100 }
+);
 
 /**
  * @param {Object} state.
@@ -106,25 +116,42 @@ export const queriesByRequester = memoize(({ state, requesterId }) => {
 /**
  * @returns {Array} uniq document ids of all LIVE queries.
  */
-export const anotherLiveQueriesResult = memoize(({ allQueries, collection, queryId }) => {
-  let docIds = [];
-  forEach(allQueries, (query) => {
-    if (queryId !== query.id && query.collection === collection && query.result && query.status === 'LIVE') {
-      docIds.push(...query.result);
-    }
-  });
-  return uniq(docIds);
-});
+export const anotherLiveQueriesResult = memoize(
+  ({ allQueries, collection, queryId }) => {
+    let docIds = [];
+    forEach(allQueries, (query) => {
+      if (
+        queryId !== query.id &&
+        query.collection === collection &&
+        query.result &&
+        query.status === "LIVE"
+      ) {
+        docIds.push(...query.result);
+      }
+    });
+    return uniq(docIds);
+  }
+);
 
 /**
  * @returns {Array} Closed queries result.
  */
-export const closedQueriesResult = memoize(({ allQueries, collection, requesterId }) => {
-  let docIds = [];
-  forEach(allQueries, (query) => {
-    if (query.collection === collection && query.result && query.status === 'CLOSED' && !query.once && !query.request.documentId && query.requesterId && query.requesterId === requesterId) {
-      docIds.push(...query.result);
-    }
-  });
-  return uniq(docIds);
-})
+export const closedQueriesResult = memoize(
+  ({ allQueries, collection, requesterId }) => {
+    let docIds = [];
+    forEach(allQueries, (query) => {
+      if (
+        query.collection === collection &&
+        query.result &&
+        query.status === "CLOSED" &&
+        !query.once &&
+        !query.request.documentId &&
+        query.requesterId &&
+        query.requesterId === requesterId
+      ) {
+        docIds.push(...query.result);
+      }
+    });
+    return uniq(docIds);
+  }
+);
