@@ -28,6 +28,7 @@ Reads data from the firestore for given collection/subcollection based on given 
   const query = firestoreRedux.query(
     collection
     {
+      id,
       requesterId,
       collection,
       where,
@@ -47,7 +48,7 @@ Reads data from the firestore for given collection/subcollection based on given 
 
 - `collection (String)` Collection or subcollection ID. It cannot contain a slash. It is mandatory.
 - `queryCriteria (Object)`: Optional. If not provided, reads all documents of given collection/subcollection.
-
+  - `id (String)` Query Id.
   - `requesterId (String)` Requester Id.
   - `where (Array)` List of where conditions. e.g. `[['firstName', '==', 'Nirmal'], ['lastName', '==', 'Baldaniya']]`.
   - `orderBy (Array)` List of orderBy fields. e.g. `[['lastSeen', 'asc'], ['age', 'desc']]`.
@@ -87,6 +88,7 @@ const query = firestoreRedux.getDocById(collection, docId, { requesterId });
 - `collectionPath (String)` Collection or subcollection path. e.g. `users` or `boards/$boardId/cards`.
 - `docId (String)` Document ID.
 - `options (Object)` Options
+  - `id (String)` Query Id.
   - `requesterId (String)` Requester Id.
   - `once (Boolean)` `true` When query is not realtime.
   - `waitTillSucceed (Boolean)` When it's `true`, retries query based on `readPollingConfig`.

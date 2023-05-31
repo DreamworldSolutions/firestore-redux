@@ -63,7 +63,7 @@ class FirestoreRedux {
       throw "firestore-redux > query : collection is not provided";
     }
 
-    const id = uuidBase62();
+    const id = (criteria && criteria.id) || uuidBase62();
     const instance = new Query(this.store, this.db, this.readPollingConfig);
     this._queries[id] = instance;
     instance.query(id, collection, criteria);
@@ -93,7 +93,7 @@ class FirestoreRedux {
       throw `firestore-redux > getDocById > Collection/Subcollection path is not valid. ${collectionPath}`;
     }
 
-    const id = uuidBase62();
+    const id = (options && options.id) || uuidBase62();
     const instance = new GetDocById(
       this.store,
       this.db,
