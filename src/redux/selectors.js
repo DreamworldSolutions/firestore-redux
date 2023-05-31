@@ -109,9 +109,12 @@ export const liveQueriesByRequester = memoize(
  * @param {String} requesterId.
  * @returns {Array} All queries by requesterId.
  */
-export const queriesByRequester = memoize(({ state, requesterId }) => {
-  return filter(get(state, `firestore.queries`), { requesterId });
-});
+export const queriesByRequester = memoize(
+  ({ state, requesterId }) => {
+    return filter(get(state, `firestore.queries`), { requesterId });
+  },
+  { size: 100 }
+);
 
 /**
  * @returns {Array} uniq document ids of all LIVE queries.
@@ -130,7 +133,8 @@ export const anotherLiveQueriesResult = memoize(
       }
     });
     return uniq(docIds);
-  }
+  },
+  { size: 100 }
 );
 
 /**
@@ -153,5 +157,6 @@ export const closedQueriesResult = memoize(
       }
     });
     return uniq(docIds);
-  }
+  },
+  { size: 100 }
 );
