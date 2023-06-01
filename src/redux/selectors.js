@@ -60,31 +60,57 @@ export const docsByQuery = memoize(
  * @param {String} id Query Id
  * @returns {Object} Query details. e.g {id, requesterId, request, status, error}
  */
-export const query = (state, id) => get(state, `firestore.queries.${id}`, {});
+export const query = (state, id) => _query({ state, id });
+
+const _query = memoize(
+  ({ state, id }) => {
+    return get(state, `firestore.queries.${id}`, {});
+  },
+  { size: 100 }
+);
 
 /**
  * @param {Object} state Redux state
  * @param {String} id Query Id
  * @returns {String} Status of the query. Possible values: 'PENDING', 'LIVE' 'CLOSED' or 'FAILED'.
  */
-export const queryStatus = (state, id) =>
-  get(state, `firestore.queries.${id}.status`, "");
+
+export const queryStatus = (state, id) => _queryStatus({ state, id });
+
+const _queryStatus = memoize(
+  ({ state, id }) => {
+    return get(state, `firestore.queries.${id}.status`, "");
+  },
+  { size: 100 }
+);
 
 /**
  * @param {Object} state Redux state
  * @param {String} id Query Id
  * @returns {Object} Error dtails of the query. e.g. {code, message}
  */
-export const queryError = (state, id) =>
-  get(state, `firestore.queries.${id}.error`, {});
+export const queryError = (state, id) => _queryError({ state, id });
+
+const _queryError = memoize(
+  ({ state, id }) => {
+    return get(state, `firestore.queries.${id}.error`, {});
+  },
+  { size: 100 }
+);
 
 /**
  * @param {Object} state Redux state.
  * @param {String} id Query ID
  * @returns {Array} Query result
  */
-export const queryResult = (state, id) =>
-  get(state, `firestore.queries.${id}.result`, []);
+export const queryResult = (state, id) => _queryResult({ state, id });
+
+const _queryResult = memoize(
+  ({ state, id }) => {
+    return get(state, `firestore.queries.${id}.result`, []);
+  },
+  { size: 100 }
+);
 
 /**
  * @param {String} requesterId Requester Id
@@ -101,7 +127,7 @@ export const liveQueriesByRequester = memoize(
     );
     return liveQueries.map(({ id }) => id) || [];
   },
-  { size: 100 }
+  { size: 500 }
 );
 
 /**

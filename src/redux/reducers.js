@@ -13,121 +13,126 @@ import { ReduxUtils } from "@dreamworld/pwa-helpers/redux-utils.js";
 const firestoreReducer = (state = INITIAL_STATE, action) => {
   switch (action.type) {
     case actions.QUERY:
-      return {
-        ...state,
-        queries: {
-          ...state.queries,
-          [action.id]: {
-            id: action.id,
-            collection: action.collection,
-            requesterId: action.requesterId,
-            request: {
-              documentId: action.documentId,
-              where: action.where,
-              orderBy: action.orderBy,
-              startAt: action.startAt,
-              startAfter: action.startAfter,
-              endAt: action.endAt,
-              endBefore: action.endBefore,
-              limit: action.limit,
-              waitTillSucceed: action.waitTillSucceed,
+      forEach(action.value, (query) => {
+        state = {
+          ...state,
+          queries: {
+            ...state.queries,
+            [query.id]: {
+              id: query.id,
+              collection: query.collection,
+              requesterId: query.requesterId,
+              request: {
+                documentId: query.documentId,
+                where: query.where,
+                orderBy: query.orderBy,
+                startAt: query.startAt,
+                startAfter: query.startAfter,
+                endAt: query.endAt,
+                endBefore: query.endBefore,
+                limit: query.limit,
+                waitTillSucceed: query.waitTillSucceed,
+              },
+              status: "PENDING",
+              once: query.once,
             },
-            status: "PENDING",
-            once: action.once,
           },
-        },
-      };
+        };
+      });
+      return state;
 
     case actions.QUERY_SNAPSHOT:
-      let allQueries = get(state, "queries");
-      let liveQueriesResult = selectors.anotherLiveQueriesResult({
-        allQueries,
-        collection: action.collection,
-        queryId: action.id,
-      });
-      let closedQueriesResult = selectors.closedQueriesResult({
-        allQueries,
-        collection: action.collection,
-      });
+      forEach(action.value, (snapshot) => {
+        let allQueries = get(state, "queries");
+        let liveQueriesResult = selectors.anotherLiveQueriesResult({
+          allQueries,
+          collection: snapshot.collection,
+          queryId: snapshot.id,
+        });
 
-      // Updates query status to LIVE or CLOSED.
-      state = ReduxUtils.replace(
-        state,
-        `queries.${action.id}.status`,
-        action.status
-      );
-
-      const oldResult = get(state, `queries.${action.id}.result`, []);
-      let newResult = [...oldResult];
-
-      // Updates query result.
-      forEach(action.docs, (doc) => {
-        if (doc.data) {
-          if (doc.newIndex !== -1 && newResult[doc.newIndex] !== doc.id) {
-            if (doc.oldIndex !== -1) {
-              newResult.splice(doc.oldIndex, 1);
-            }
-            newResult.splice(doc.newIndex, 0, doc.id);
-          }
-        }
-
-        // When document is removed from current query snapshot but same document exists in another query, do not remove it from redux state.
-        if (doc.newIndex === -1) {
-          newResult = without(newResult, doc.id);
-        }
-      });
-
-      if (!isEqual(oldResult, newResult)) {
+        // Updates query status to LIVE or CLOSED.
         state = ReduxUtils.replace(
           state,
-          `queries.${action.id}.result`,
-          newResult
+          `queries.${snapshot.id}.status`,
+          snapshot.status
         );
-      }
 
-      // Updates only those documents which are actually changed.
-      forEach(action.docs, (doc) => {
-        if (
-          !isEqual(doc.data, get(state, `docs.${action.collection}.${doc.id}`))
-        ) {
-          if (doc.data === undefined) {
-            // When same document exists in another query, do not remove it from redux state.
-            if (liveQueriesResult.includes(doc.id)) {
-              return;
+        const oldResult = get(state, `queries.${snapshot.id}.result`, []);
+        let newResult = [...oldResult];
+
+        // Updates query result.
+        forEach(snapshot.docs, (doc) => {
+          if (doc.data) {
+            if (doc.newIndex !== -1 && newResult[doc.newIndex] !== doc.id) {
+              if (doc.oldIndex !== -1) {
+                newResult.splice(doc.oldIndex, 1);
+              }
+              newResult.splice(doc.newIndex, 0, doc.id);
             }
           }
 
+          // When document is removed from current query snapshot but same document exists in another query, do not remove it from redux state.
+          if (doc.newIndex === -1) {
+            newResult = without(newResult, doc.id);
+          }
+        });
+
+        if (!isEqual(oldResult, newResult)) {
           state = ReduxUtils.replace(
             state,
-            `docs.${action.collection}.${doc.id}`,
-            doc.data
+            `queries.${snapshot.id}.result`,
+            newResult
           );
         }
-      });
 
-      // Removes documents from the state which exist in CLOSED queries but not in LIVE queries.
-      allQueries = get(state, "queries");
-      liveQueriesResult = selectors.anotherLiveQueriesResult({
-        allQueries,
-        collection: action.collection,
-      });
-      closedQueriesResult = selectors.closedQueriesResult({
-        allQueries,
-        collection: action.collection,
-        requesterId: action.requesterId,
-      });
-      const removedDocuments = difference(
-        closedQueriesResult,
-        liveQueriesResult
-      );
+        // Updates only those documents which are actually changed.
+        forEach(snapshot.docs, (doc) => {
+          if (
+            !isEqual(
+              doc.data,
+              get(state, `docs.${snapshot.collection}.${doc.id}`)
+            )
+          ) {
+            if (doc.data === undefined) {
+              // When same document exists in another query, do not remove it from redux state.
+              if (liveQueriesResult.includes(doc.id)) {
+                return;
+              }
+            }
 
-      forEach(removedDocuments, (docId) => {
-        state = ReduxUtils.replace(
-          state,
-          `docs.${action.collection}.${docId}`,
-          undefined
+            state = ReduxUtils.replace(
+              state,
+              `docs.${snapshot.collection}.${doc.id}`,
+              doc.data
+            );
+          }
+        });
+
+        // Removes documents from the state which exist in CLOSED queries but not in LIVE queries.
+        allQueries = get(state, "queries");
+        liveQueriesResult = selectors.anotherLiveQueriesResult({
+          allQueries,
+          collection: snapshot.collection,
+        });
+        const closedQueriesResult = selectors.closedQueriesResult({
+          allQueries,
+          collection: snapshot.collection,
+          requesterId: snapshot.requesterId,
+        });
+        const removedDocuments = difference(
+          closedQueriesResult,
+          liveQueriesResult
         );
+
+        forEach(removedDocuments, (docId) => {
+          state = ReduxUtils.replace(
+            state,
+            `docs.${snapshot.collection}.${docId}`,
+            undefined
+          );
+        });
       });
+
       return state;
 
     case actions.QUERY_FAILED:

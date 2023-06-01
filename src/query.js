@@ -4,6 +4,8 @@ import forEach from "lodash-es/forEach.js";
 import get from "lodash-es/get.js";
 import isEmpty from "lodash-es/isEmpty.js";
 import { retry as reAttempt } from "@lifeomic/attempt";
+import queryActionDispatcher from "./query-action-dispatcher.js";
+import snapshotActionDispatcher from "./snapshot-action-dispatcher.js";
 
 import {
   collectionGroup,
@@ -60,8 +62,8 @@ class Query {
     const waitTillSucceed = criteria.waitTillSucceed;
 
     if (!this._waiting) {
-      this.store.dispatch(
-        actions.query({
+      queryActionDispatcher(
+        {
           id,
           collection,
           requesterId,
@@ -74,7 +76,8 @@ class Query {
           limit,
           once,
           waitTillSucceed,
-        })
+        },
+        this.store
       );
 
       this.result = new Promise((resolve, reject) => {
@@ -159,7 +162,7 @@ class Query {
       snapshot.forEach((doc) => {
         docs.push({
           id: doc.id,
-          data: {...doc.data()},
+          data: { ...doc.data() },
           newIndex: i,
           oldIndex: -1,
         });
@@ -174,7 +177,7 @@ class Query {
           collection,
           docs,
           status: "CLOSED",
-          requesterId: this.requesterId
+          requesterId: this.requesterId,
         });
 
         const result = selectors.docsByQuery({
@@ -216,7 +219,7 @@ class Query {
           if (change.type === "added") {
             docs.push({
               id: change.doc.id,
-              data: {...change.doc.data()},
+              data: { ...change.doc.data() },
               newIndex: change.newIndex,
               oldIndex: change.oldIndex,
             });
@@ -224,7 +227,7 @@ class Query {
           if (change.type === "modified") {
             docs.push({
               id: change.doc.id,
-              data: {...change.doc.data()},
+              data: { ...change.doc.data() },
               newIndex: change.newIndex,
               oldIndex: change.oldIndex,
             });
@@ -248,7 +251,7 @@ class Query {
             collection,
             docs,
             status: "LIVE",
-            requesterId: this.requesterId
+            requesterId: this.requesterId,
           });
           if (!queryResolved) {
             const result = selectors.docsByQuery({
@@ -392,8 +395,9 @@ class Query {
    * @private
    */
   __dispatchQuerySnapshot({ id, collection, docs, status, requesterId }) {
-    this.store.dispatch(
-      actions._querySnapShot({ id, collection, docs, status, requesterId })
+    snapshotActionDispatcher(
+      { id, collection, docs, status, requesterId },
+      this.store
     );
   }
 
