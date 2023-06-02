@@ -31,6 +31,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
                 limit: query.limit,
                 waitTillSucceed: query.waitTillSucceed,
               },
+              result: get(state, `queries.${query.id}.result`),
               status: "PENDING",
               once: query.once,
             },
