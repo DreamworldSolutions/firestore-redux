@@ -67,15 +67,14 @@ export const _queryFailed = ({ id, error }) => {
 /**
  * Cancels queries by it's id/requester id.
  * One of the property must have: either `id` or `requesterId`
- * @param {String} id Query Id
- *  @property {String} id Query Id.
- *  @property {String} requesterId Requester Id.
+ * @param {payload[]} id Query Id
+ *  @property {String} payload.id Query Id.
+ *  @property {String} payload.requesterId Requester Id.
  */
-export const cancelQuery = ({ id, requesterId }) => {
+export const cancelQuery = (value) => {
   return {
     type: CANCEL_QUERY,
-    id,
-    requesterId,
+    value
   };
 };
 

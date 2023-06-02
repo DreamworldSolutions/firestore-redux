@@ -1,14 +1,12 @@
 const INITIAL_STATE = { queries: {}, docs: {} };
 import * as actions from "./actions.js";
-import * as selectors from "./selectors.js";
 import isEmpty from "lodash-es/isEmpty.js";
 import get from "lodash-es/get.js";
 import forEach from "lodash-es/forEach.js";
 import isEqual from "lodash-es/isEqual.js";
 import without from "lodash-es/without.js";
-import difference from "lodash-es/difference.js";
 import cloneDeep from "lodash-es/cloneDeep.js";
-import { ReduxUtils } from "@dreamworld/pwa-helpers/redux-utils.js";
+import { ReduxUtils } from "@dw/pwa-helpers/redux-utils.js";
 
 const firestoreReducer = (state = INITIAL_STATE, action) => {
   switch (action.type) {
@@ -43,13 +41,6 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
 
     case actions.QUERY_SNAPSHOT:
       forEach(action.value, (snapshot) => {
-        let allQueries = get(state, "queries");
-        let liveQueriesResult = selectors.anotherLiveQueriesResult({
-          allQueries,
-          collection: snapshot.collection,
-          queryId: snapshot.id,
-        });
-
         // Updates query status to LIVE or CLOSED.
         state = ReduxUtils.replace(
           state,
@@ -88,48 +79,18 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
         // Updates only those documents which are actually changed.
         forEach(snapshot.docs, (doc) => {
           if (
+            doc.data &&
             !isEqual(
               doc.data,
               get(state, `docs.${snapshot.collection}.${doc.id}`)
             )
           ) {
-            if (doc.data === undefined) {
-              // When same document exists in another query, do not remove it from redux state.
-              if (liveQueriesResult.includes(doc.id)) {
-                return;
-              }
-            }
-
             state = ReduxUtils.replace(
               state,
               `docs.${snapshot.collection}.${doc.id}`,
               doc.data
             );
           }
-        });
-
-        // Removes documents from the state which exist in CLOSED queries but not in LIVE queries.
-        allQueries = get(state, "queries");
-        liveQueriesResult = selectors.anotherLiveQueriesResult({
-          allQueries,
-          collection: snapshot.collection,
-        });
-        const closedQueriesResult = selectors.closedQueriesResult({
-          allQueries,
-          collection: snapshot.collection,
-          requesterId: snapshot.requesterId,
-        });
-        const removedDocuments = difference(
-          closedQueriesResult,
-          liveQueriesResult
-        );
-
-        forEach(removedDocuments, (docId) => {
-          state = ReduxUtils.replace(
-            state,
-            `docs.${snapshot.collection}.${docId}`,
-            undefined
-          );
         });
       });
 
@@ -149,24 +110,31 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       );
 
     case actions.CANCEL_QUERY:
-      if (action.id && !isEmpty(get(state, `queries.${action.id}`))) {
-        return ReduxUtils.replace(
-          state,
-          `queries.${action.id}.status`,
-          "CLOSED"
-        );
-      }
+      forEach(action.value, (query) => {
+        if (query.id && !isEmpty(get(state, `queries.${query.id}`))) {
+          state = ReduxUtils.replace(
+            state,
+            `queries.${query.id}.status`,
+            "CLOSED"
+          );
+        }
 
-      if (action.requesterId) {
-        forEach(get(state, `queries`), (query, id) => {
-          if (
-            (query.status === "LIVE" || query.status === "PENDING") &&
-            query.requesterId === action.requesterId
-          ) {
-            state = ReduxUtils.replace(state, `queries.${id}.status`, "CLOSED");
-          }
-        });
-      }
+        if (query.requesterId) {
+          forEach(get(state, `queries`), (q, id) => {
+            if (
+              (q.status === "LIVE" || q.status === "PENDING") &&
+              q.requesterId === query.requesterId
+            ) {
+              state = ReduxUtils.replace(
+                state,
+                `queries.${id}.status`,
+                "CLOSED"
+              );
+            }
+          });
+        }
+      });
+
       return state;
 
     case actions.SAVE:

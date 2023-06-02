@@ -12,7 +12,7 @@ import forEach from "lodash-es/forEach.js";
 import isEmpty from "lodash-es/isEmpty.js";
 import isObject from "lodash-es/isObject.js";
 import isArray from "lodash-es/isArray.js";
-
+import cancelQueryActionDispatcher from "./cancel-query-action-dispatcher.js";
 class FirestoreRedux {
   constructor() {
     /**
@@ -174,7 +174,7 @@ class FirestoreRedux {
     if (!id || !status || (status !== "LIVE" && status !== "PENDING")) {
       return;
     }
-    this.store.dispatch(_actions.cancelQuery({ id }));
+    cancelQueryActionDispatcher({ id }, this.store);
     this.__cancel(id);
   }
 
@@ -190,7 +190,7 @@ class FirestoreRedux {
     forEach(liveQueries, (id) => {
       this.__cancel(id);
     });
-    this.store.dispatch(_actions.cancelQuery({ requesterId }));
+    cancelQueryActionDispatcher({ requesterId }, this.store);
   }
 
   /**
