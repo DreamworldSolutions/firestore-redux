@@ -2,8 +2,9 @@ import get from "lodash-es/get.js";
 import values from "lodash-es/values.js";
 import filter from "lodash-es/filter.js";
 import forEach from "lodash-es/forEach.js";
-import memoize from "proxy-memoize";
 import uniq from "lodash-es/uniq.js";
+import { createSelector } from 'reselect';
+import isEqual from "lodash-es/isEqual.js";
 
 /**
  * @param {Object} state Redux State.
@@ -20,12 +21,12 @@ export const doc = (state, collection, docId) =>
  *  @property {collection} collection Collection / Subcollection ID.
  * @returns {Array} All documents of given collection Id.
  */
-export const allDocs = memoize(
-  ({ state, collection }) => {
-    const docs = get(state, `firestore.docs.${collection}`);
+export const allDocs = createSelector(
+  (state, collection) => get(state, `firestore.docs.${collection}`),
+  (docs) => {
     return values(docs);
   },
-  { size: 100 }
+  { maxSize: 500, resultEqualityCheck: isEqual }
 );
 
 /**
@@ -42,17 +43,43 @@ export const collection = (state, collection) =>
  *  @property {String} queryId Query Id
  * @returns {Array} All documents of given query Id.
  */
-export const docsByQuery = memoize(
-  ({ state, queryId }) => {
-    const query = get(state, `firestore.queries.${queryId}`) || {};
-    const allDocs = get(state, `firestore.docs.${query.collection}`);
+export const docsByQuery = createSelector(
+  (state, queryId) => get(state, `firestore.queries.${queryId}.collection`),
+  (state, queryId) => get(state, `firestore.queries.${queryId}.result`),
+  (state, queryId) => get(state, `firestore.docs`),
+  (queryCollection, queryResult, allDocs) => {
+    if(!queryCollection) {
+      return [];
+    }
+
+    allDocs = get(allDocs, queryCollection);
     let docs = [];
-    forEach(query.result, (docId) => {
+    forEach(queryResult, (docId) => {
       allDocs && docs.push(allDocs[docId]);
     });
     return docs;
   },
-  { size: 500 }
+  { maxSize: 500, resultEqualityCheck: isEqual }
+);
+
+/**
+ * @param0
+ *  @property {Object} state Redux state.
+ *  @property {String} queryId Query Id
+ *  @property {String} collection collection name.
+ * @returns {Array} All documents of given query Id.
+ */
+export const docsByQueryResult = createSelector(
+  (state, queryId) => get(state, `firestore.queries.${queryId}.result`),
+  (state, queryId, collection) => get(state, `firestore.docs.${collection}`),
+  (result, allDocs) => {
+    let docs = [];
+    forEach(result, (docId) => {
+      allDocs && docs.push(allDocs[docId]);
+    });
+    return docs;
+  },
+  { maxSize: 1000, resultEqualityCheck: isEqual }
 );
 
 /**
@@ -67,32 +94,31 @@ export const query = (state, id) => get(state, `firestore.queries.${id}`, {});
  * @param {String} id Query Id
  * @returns {String} Status of the query. Possible values: 'PENDING', 'LIVE' 'CLOSED' or 'FAILED'.
  */
-export const queryStatus = (state, id) =>
-  get(state, `firestore.queries.${id}.status`, "");
+
+export const queryStatus = (state, id) => get(state, `firestore.queries.${id}.status`, "");
 
 /**
  * @param {Object} state Redux state
  * @param {String} id Query Id
  * @returns {Object} Error dtails of the query. e.g. {code, message}
  */
-export const queryError = (state, id) =>
-  get(state, `firestore.queries.${id}.error`, {});
+export const queryError = (state, id) => get(state, `firestore.queries.${id}.error`, {});
 
 /**
  * @param {Object} state Redux state.
  * @param {String} id Query ID
  * @returns {Array} Query result
  */
-export const queryResult = (state, id) =>
-  get(state, `firestore.queries.${id}.result`, []);
+export const queryResult = (state, id) => get(state, `firestore.queries.${id}.result`, []);
 
 /**
  * @param {String} requesterId Requester Id
  * @returns {Array} List of LIVE query ids e.g. [$queryId1, queryId2, ...]
  */
-export const liveQueriesByRequester = memoize(
-  ({ state, requesterId }) => {
-    const queries = get(state, `firestore.queries`);
+export const liveQueriesByRequester = createSelector(
+  (state, requesterId) => requesterId,
+  (state, requesterId) => get(state, `firestore.queries`),
+  (requesterId, queries) => {
     const liveQueries = filter(
       values(queries),
       (query) =>
@@ -101,7 +127,7 @@ export const liveQueriesByRequester = memoize(
     );
     return liveQueries.map(({ id }) => id) || [];
   },
-  { size: 100 }
+  { maxSize: 500, resultEqualityCheck: isEqual }
 );
 
 /**
@@ -109,18 +135,24 @@ export const liveQueriesByRequester = memoize(
  * @param {String} requesterId.
  * @returns {Array} All queries by requesterId.
  */
-export const queriesByRequester = memoize(
-  ({ state, requesterId }) => {
-    return filter(get(state, `firestore.queries`), { requesterId });
+export const queriesByRequester = createSelector(
+  (state, requesterId) => requesterId,
+  (state, requesterId) => get(state, `firestore.queries`),
+  (requesterId, allQueries) => {
+    return filter(allQueries, { requesterId });
   },
-  { size: 100 }
+  { maxSize: 100, resultEqualityCheck: isEqual }
 );
 
 /**
  * @returns {Array} uniq document ids of all LIVE queries.
  */
-export const anotherLiveQueriesResult = memoize(
-  ({ allQueries, collection, queryId }) => {
+export const anotherLiveQueriesResult = ({ allQueries, collection, queryId }) => _anotherLiveQueriesResult(allQueries, collection, queryId);
+const _anotherLiveQueriesResult = createSelector(
+  (allQueries, collection, queryId) => allQueries,
+  (allQueries, collection, queryId) => collection,
+  (allQueries, collection, queryId) => queryId,
+  (allQueries, collection, queryId) => {
     let docIds = [];
     forEach(allQueries, (query) => {
       if (
@@ -134,14 +166,18 @@ export const anotherLiveQueriesResult = memoize(
     });
     return uniq(docIds);
   },
-  { size: 100 }
+  { maxSize: 100, resultEqualityCheck: isEqual }
 );
 
 /**
  * @returns {Array} Closed queries result.
  */
-export const closedQueriesResult = memoize(
-  ({ allQueries, collection, requesterId }) => {
+export const closedQueriesResult = ({ allQueries, collection, requesterId }) => _closedQueriesResult(allQueries, collection, requesterId);
+const _closedQueriesResult = createSelector(
+  (allQueries, collection, requesterId) => allQueries,
+  (allQueries, collection, requesterId) => collection,
+  (allQueries, collection, requesterId) => requesterId,
+  (allQueries, collection, requesterId) => {
     let docIds = [];
     forEach(allQueries, (query) => {
       if (
@@ -158,5 +194,57 @@ export const closedQueriesResult = memoize(
     });
     return uniq(docIds);
   },
-  { size: 100 }
+  { maxSize: 100, resultEqualityCheck: isEqual }
+);
+
+export const getQueryId = ({collection, criteria}) => _getQueryId(collection, criteria);
+const _getQueryId = createSelector(
+  (collection, criteria) => criteria,
+  (collection, criteria) => collection,
+  (criteria, collection) => {
+    let id = `${collection}`;
+    criteria && forEach(criteria.where, (value) => {
+      id += `_${value[0]}-${value[2]}`;
+    });
+
+    criteria && forEach(criteria.orderBy, (value) => {
+      const order = value[1] || 'asc';
+      id += `_${value[0]}-${order}`;
+    });
+
+    if(criteria && criteria.documentId){
+      id += `_${criteria.documentId}`;
+    }
+
+    if(criteria && criteria.startAt){
+      id += `_startAt-${criteria.startAt}`;
+    }
+
+    if(criteria && criteria.startAfter){
+      id += `_startAfter-${criteria.startAfter}`;
+    }
+
+    if(criteria && criteria.endAt){
+      id += `_endAt-${criteria.endAt}`;
+    }
+
+    if(criteria && criteria.endBefore){
+      id += `_endBefore-${criteria.endBefore}`;
+    }
+
+    if(criteria && criteria.limit){
+      id += `_limit-${criteria.limit}`;
+    }
+
+    if(criteria && criteria.once){
+      id += `_once`;
+    }
+
+    if(criteria && criteria.waitTillSucceed){
+      id += `_waitTillSucceed`;
+    }
+
+    return id;
+  },
+  { maxSize: 500, resultEqualityCheck: isEqual }
 );

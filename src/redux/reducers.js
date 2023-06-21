@@ -1,133 +1,113 @@
 const INITIAL_STATE = { queries: {}, docs: {} };
 import * as actions from "./actions.js";
-import * as selectors from "./selectors.js";
+import * as selectors from './selectors.js';
 import isEmpty from "lodash-es/isEmpty.js";
 import get from "lodash-es/get.js";
 import forEach from "lodash-es/forEach.js";
 import isEqual from "lodash-es/isEqual.js";
 import without from "lodash-es/without.js";
-import difference from "lodash-es/difference.js";
 import cloneDeep from "lodash-es/cloneDeep.js";
 import { ReduxUtils } from "@dreamworld/pwa-helpers/redux-utils.js";
 
 const firestoreReducer = (state = INITIAL_STATE, action) => {
   switch (action.type) {
     case actions.QUERY:
-      return {
-        ...state,
-        queries: {
-          ...state.queries,
-          [action.id]: {
-            id: action.id,
-            collection: action.collection,
-            requesterId: action.requesterId,
-            request: {
-              documentId: action.documentId,
-              where: action.where,
-              orderBy: action.orderBy,
-              startAt: action.startAt,
-              startAfter: action.startAfter,
-              endAt: action.endAt,
-              endBefore: action.endBefore,
-              limit: action.limit,
-              waitTillSucceed: action.waitTillSucceed,
+      forEach(action.value, (query) => {
+        state = {
+          ...state,
+          queries: {
+            ...state.queries,
+            [query.id]: {
+              id: query.id,
+              collection: query.collection,
+              requesterId: query.requesterId,
+              request: {
+                documentId: query.documentId,
+                where: query.where,
+                orderBy: query.orderBy,
+                startAt: query.startAt,
+                startAfter: query.startAfter,
+                endAt: query.endAt,
+                endBefore: query.endBefore,
+                limit: query.limit,
+                waitTillSucceed: query.waitTillSucceed,
+              },
+              result: get(state, `queries.${query.id}.result`),
+              status: "PENDING",
+              once: query.once,
             },
-            status: "PENDING",
-            once: action.once,
           },
-        },
-      };
+        };
+      });
+      return state;
 
     case actions.QUERY_SNAPSHOT:
-      let allQueries = get(state, "queries");
-      let liveQueriesResult = selectors.anotherLiveQueriesResult({
-        allQueries,
-        collection: action.collection,
-        queryId: action.id,
-      });
-      let closedQueriesResult = selectors.closedQueriesResult({
-        allQueries,
-        collection: action.collection,
-      });
-
-      // Updates query status to LIVE or CLOSED.
-      state = ReduxUtils.replace(
-        state,
-        `queries.${action.id}.status`,
-        action.status
-      );
-
-      const oldResult = get(state, `queries.${action.id}.result`, []);
-      let newResult = [...oldResult];
-
-      // Updates query result.
-      forEach(action.docs, (doc) => {
-        if (doc.data) {
-          if (doc.newIndex !== -1 && newResult[doc.newIndex] !== doc.id) {
-            if (doc.oldIndex !== -1) {
-              newResult.splice(doc.oldIndex, 1);
-            }
-            newResult.splice(doc.newIndex, 0, doc.id);
-          }
-        }
-
-        // When document is removed from current query snapshot but same document exists in another query, do not remove it from redux state.
-        if (doc.newIndex === -1) {
-          newResult = without(newResult, doc.id);
-        }
-      });
-
-      if (!isEqual(oldResult, newResult)) {
+      forEach(action.value, (snapshot) => {
+        const oldStatus = get(state, `queries.${snapshot.id}.status`);
+        // Updates query status to LIVE or CLOSED.
         state = ReduxUtils.replace(
           state,
-          `queries.${action.id}.result`,
-          newResult
+          `queries.${snapshot.id}.status`,
+          snapshot.status
         );
-      }
 
-      // Updates only those documents which are actually changed.
-      forEach(action.docs, (doc) => {
-        if (
-          !isEqual(doc.data, get(state, `docs.${action.collection}.${doc.id}`))
-        ) {
-          if (doc.data === undefined) {
-            // When same document exists in another query, do not remove it from redux state.
-            if (liveQueriesResult.includes(doc.id)) {
-              return;
+        const oldResult = get(state, `queries.${snapshot.id}.result`, []);
+        let newResult = oldStatus === 'PENDING' ? []: [...oldResult];
+
+        // Updates query result.
+        forEach(snapshot.docs, (doc) => {
+          if (doc.data) {
+            // When new doc is added or result order is changed.
+            if (doc.newIndex !== -1 && newResult[doc.newIndex] !== doc.id) {
+              // Remove docId from older index.
+              if (newResult.includes(doc.id)) {
+                newResult = without(newResult, doc.id);
+              }
+              // Add docId to newer index.
+              newResult.splice(doc.newIndex, 0, doc.id);
             }
           }
 
+          // When document is removed.
+          if (doc.newIndex === -1) {
+            newResult = without(newResult, doc.id);
+          }
+        });
+
+        if (!isEqual(oldResult, newResult)) {
           state = ReduxUtils.replace(
             state,
-            `docs.${action.collection}.${doc.id}`,
-            doc.data
+            `queries.${snapshot.id}.result`,
+            newResult
           );
         }
+
+        // Updates only those documents which are actually changed.
+        forEach(snapshot.docs, (doc) => {
+          if (!isEqual(doc.data,get(state, `docs.${snapshot.collection}.${doc.id}`))) {
+
+            // When same document exists in another query, do not remove it from redux state.
+            if (doc.data === undefined) {
+              let allQueries = get(state, "queries");
+              let liveQueriesResult = selectors.anotherLiveQueriesResult({
+                allQueries,
+                collection: action.collection,
+                queryId: action.id,
+              });
+              if (liveQueriesResult.includes(doc.id)) {
+                return;
+              }
+            }
+
+            state = ReduxUtils.replace(
+              state,
+              `docs.${snapshot.collection}.${doc.id}`,
+              doc.data
+            );
+          }
+        });
       });
 
-      // Removes documents from the state which exist in CLOSED queries but not in LIVE queries.
-      allQueries = get(state, "queries");
-      liveQueriesResult = selectors.anotherLiveQueriesResult({
-        allQueries,
-        collection: action.collection,
-      });
-      closedQueriesResult = selectors.closedQueriesResult({
-        allQueries,
-        collection: action.collection,
-        requesterId: action.requesterId,
-      });
-      const removedDocuments = difference(
-        closedQueriesResult,
-        liveQueriesResult
-      );
-
-      forEach(removedDocuments, (docId) => {
-        state = ReduxUtils.replace(
-          state,
-          `docs.${action.collection}.${docId}`,
-          undefined
-        );
-      });
       return state;
 
     case actions.QUERY_FAILED:
@@ -144,24 +124,31 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
       );
 
     case actions.CANCEL_QUERY:
-      if (action.id && !isEmpty(get(state, `queries.${action.id}`))) {
-        return ReduxUtils.replace(
-          state,
-          `queries.${action.id}.status`,
-          "CLOSED"
-        );
-      }
+      forEach(action.value, (query) => {
+        if (query.id && !isEmpty(get(state, `queries.${query.id}`))) {
+          state = ReduxUtils.replace(
+            state,
+            `queries.${query.id}.status`,
+            "CLOSED"
+          );
+        }
 
-      if (action.requesterId) {
-        forEach(get(state, `queries`), (query, id) => {
-          if (
-            (query.status === "LIVE" || query.status === "PENDING") &&
-            query.requesterId === action.requesterId
-          ) {
-            state = ReduxUtils.replace(state, `queries.${id}.status`, "CLOSED");
-          }
-        });
-      }
+        if (query.requesterId) {
+          forEach(get(state, `queries`), (q, id) => {
+            if (
+              (q.status === "LIVE" || q.status === "PENDING") &&
+              q.requesterId === query.requesterId
+            ) {
+              state = ReduxUtils.replace(
+                state,
+                `queries.${id}.status`,
+                "CLOSED"
+              );
+            }
+          });
+        }
+      });
+
       return state;
 
     case actions.SAVE:
@@ -169,12 +156,25 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
         return state;
       }
       const docs = cloneDeep(action.docs);
+
       forEach(docs, (doc) => {
+        // Localwrite doc
         const pathSegments = action.collectionPath.split("/");
         const collection = pathSegments[pathSegments.length - 1];
         doc._syncPending = true;
         state = ReduxUtils.replace(state, `docs.${collection}.${doc.id}`, doc);
+
+        // Localwrite query result when queryId is provided in options.
+        if(action.options.queryId) {
+          const queryResultPath = `queries.${action.options.queryId}.result`;
+          const queryResult = get(state, queryResultPath, []);
+          if(!queryResult.includes(doc.id)) {
+            state = ReduxUtils.replace(state, queryResultPath, [...queryResult, doc.id]);
+          }
+        }
       });
+
+
       return state;
 
     case actions.SAVE_DONE:
@@ -204,6 +204,17 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
           `docs.${collection}.${docId}`,
           undefined
         );
+
+        // Remove docId from query result when queryId is provided.
+        if(action.options.queryId) {
+          const path = `queries.${action.options.queryId}.result`;
+          const result = get(state, path, []);
+          state = ReduxUtils.replace(
+            state,
+            path,
+            without(result, docId)
+          );
+        }
       });
       return state;
     case actions.DELETE_DONE:

@@ -6,6 +6,8 @@ import {
   onSnapshot,
 } from "firebase/firestore";
 import { retry as reAttempt } from "@lifeomic/attempt";
+import queryActionDispatcher from "./query-action-dispatcher.js";
+import snapshotActionDispatcher from "./snapshot-action-dispatcher.js";
 
 class GetDocById {
   constructor(store, db, pollingConfig) {
@@ -39,15 +41,16 @@ class GetDocById {
     const pathSegments = collectionPath.split("/");
     const collection = pathSegments[pathSegments.length - 1];
     if (!this._waiting) {
-      this.store.dispatch(
-        actions.query({
+      queryActionDispatcher(
+        {
           id,
           collection,
           documentId,
           requesterId: options.requesterId,
           once: options.once,
           waitTillSucceed: options.waitTillSucceed,
-        })
+        },
+        this.store
       );
 
       this.result = new Promise((resolve, reject) => {
@@ -113,14 +116,10 @@ class GetDocById {
           collection,
           docs,
           status: "CLOSED",
-          requesterId: this.requesterId
+          requesterId: this.requesterId,
         });
 
-        const result = selectors.doc(
-          this.store.getState(),
-          collection,
-          documentId
-        );
+        const result = doc.data();
         this._resolve(result);
         if (this._options.waitTillSucceed) {
           this._retryResolve(result);
@@ -150,7 +149,7 @@ class GetDocById {
     let resolved;
     this._unsubscribe = onSnapshot(
       fsDoc(this.db, ...pathSegments, documentId),
-      (doc) => {
+      async (doc) => {
         if (
           !this._options.waitTillSucceed ||
           (this._options.waitTillSucceed && doc.exists())
@@ -169,15 +168,11 @@ class GetDocById {
             collection,
             docs,
             status: "LIVE",
-            requesterId: this.requesterId
+            requesterId: this.requesterId,
           });
 
           if (!resolved) {
-            const result = selectors.doc(
-              this.store.getState(),
-              collection,
-              documentId
-            );
+            const result = doc.data();
             this._resolve(result);
             if (this._options.waitTillSucceed) {
               this._retryResolve(result);
@@ -231,8 +226,9 @@ class GetDocById {
    * @private
    */
   __dispatchQuerySnapshot({ id, collection, docs, status, requesterId }) {
-    this.store.dispatch(
-      actions._querySnapShot({ id, collection, docs, status, requesterId })
+    snapshotActionDispatcher(
+      { id, collection, docs, status, requesterId },
+      this.store
     );
   }
 

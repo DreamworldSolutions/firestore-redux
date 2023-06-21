@@ -13,6 +13,8 @@ import "@dreamworld/dw-radio-button/dw-radio-button";
 import { Shadow } from "@dreamworld/material-styles/shadow";
 import * as typographyLiterals from "@dreamworld/material-styles/typography-literals";
 
+window._firestoreRedux = firestoreRedux;
+
 export class FirestoreReduxDemo extends connect(store)(LitElement) {
   static styles = [
     Shadow,
@@ -136,18 +138,19 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
 
   constructor() {
     super();
-    this._queryCollection = "alphabets";
-    this._singleDocCollection = "alphabets";
+    this._queryCollection = "cards";
+    this._singleDocCollection = "cards";
     this._query = {
       requesterId: "req-id",
-      orderBy: '[["name", "asc"]]',
+      where: '[["columnType", "==", "DONE"]]',
+      orderBy: '',
     };
 
-    this._saveCollection = "alphabets";
+    this._saveCollection = "cards";
     this._saveLocal = true;
     this._saveRemote = true;
 
-    this._deleteCollection = "alphabets";
+    this._deleteCollection = "cards";
     this._deleteLocal = true;
     this._deleteRemote = true;
   }
@@ -243,6 +246,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
           <dw-input
             dense
             label="Start At"
+            value=${this._query.where}
             placeholder="Enter the field value to start this query at, in order of the query's order by"
             @value-changed=${(e) => {
               this._query.startAt = isNaN(e.detail.value)
@@ -532,7 +536,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
       const result = await window.q.result;
       console.log({ result });
       setTimeout(() => {
-        window.q.loadNextPage();
+        //window.q.loadNextPage();
       }, 5000);
     } catch (error) {
       console.log("Catch error", error);

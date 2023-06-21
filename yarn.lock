@@ -4453,18 +4453,6 @@ protobufjs@^6.11.3:
     "@types/node" ">=13.7.0"
     long "^4.0.0"
 
-proxy-compare@2.2.0:
-  version "2.2.0"
-  resolved "https://registry.yarnpkg.com/proxy-compare/-/proxy-compare-2.2.0.tgz#2357330407241b091501644d08a446a4a28e0e15"
-  integrity sha512-hEtMJevUmOByZCTw1NRUVaWWHCGJLO0ogizpey8yX6zMPolDe8YVa+PHgMOTiZuyUkFj+hMKs/1UaM0+ZkuvgA==
-
-proxy-memoize@^1.1.0:
-  version "1.1.0"
-  resolved "https://registry.yarnpkg.com/proxy-memoize/-/proxy-memoize-1.1.0.tgz#bfe8a82f59a1bb606ad7b14f16a5ecb661f231d2"
-  integrity sha512-Qfo/Bkeb9zIIJ8w5e9tzc284hl84Jc4EwZLaAPU/GfzOiMYFz6Mf8R/IPEYuo+q6672IRPscNnjksnPyoSwlZA==
-  dependencies:
-    proxy-compare "2.2.0"
-
 punycode@^2.1.1:
   version "2.1.1"
   resolved "https://registry.yarnpkg.com/punycode/-/punycode-2.1.1.tgz#b58b010ac40c22c5657616c8d2c2c02c7bf479ec"
@@ -4649,6 +4637,11 @@ require-directory@^2.1.1:
   version "2.1.1"
   resolved "https://registry.yarnpkg.com/require-directory/-/require-directory-2.1.1.tgz#8c64ad5fd30dab1c976e2344ffe7f792a6a6df42"
   integrity sha512-fGxEI7+wsG9xrvdjsrlmL22OMTTiHRwAMroiEeMgq8gzoLC/PQr7RsRDSTLUg/bZAZtF+TVIkHc6/4RIKrui+Q==
+
+reselect@^4.1.8:
+  version "4.1.8"
+  resolved "https://registry.yarnpkg.com/reselect/-/reselect-4.1.8.tgz#3f5dc671ea168dccdeb3e141236f69f02eaec524"
+  integrity sha512-ab9EmR80F/zQTMNeneUr4cv+jSwPJgIlvEmVwLerwrWVbpLlBuls9XHzIeTFy4cegU2NHBp3va0LKOzU5qFEYQ==
 
 resolve-from@^4.0.0:
   version "4.0.0"

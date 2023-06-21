@@ -12,7 +12,7 @@ import forEach from "lodash-es/forEach.js";
 import isEmpty from "lodash-es/isEmpty.js";
 import isObject from "lodash-es/isObject.js";
 import isArray from "lodash-es/isArray.js";
-
+import cancelQueryActionDispatcher from "./cancel-query-action-dispatcher.js";
 class FirestoreRedux {
   constructor() {
     /**
@@ -63,7 +63,7 @@ class FirestoreRedux {
       throw "firestore-redux > query : collection is not provided";
     }
 
-    const id = (criteria && criteria.id) || uuidBase62();
+    const id = (criteria && criteria.id) || selectors.getQueryId({collection, criteria});
     const instance = new Query(this.store, this.db, this.readPollingConfig);
     this._queries[id] = instance;
     instance.query(id, collection, criteria);
@@ -93,7 +93,7 @@ class FirestoreRedux {
       throw `firestore-redux > getDocById > Collection/Subcollection path is not valid. ${collectionPath}`;
     }
 
-    const id = (options && options.id) || uuidBase62();
+    const id = (options && options.id) || selectors.getQueryId({collection: collectionPath, criteria: { documentId, once: options && options.once }});
     const instance = new GetDocById(
       this.store,
       this.db,
@@ -174,7 +174,7 @@ class FirestoreRedux {
     if (!id || !status || (status !== "LIVE" && status !== "PENDING")) {
       return;
     }
-    this.store.dispatch(_actions.cancelQuery({ id }));
+    cancelQueryActionDispatcher({ id }, this.store);
     this.__cancel(id);
   }
 
@@ -183,14 +183,11 @@ class FirestoreRedux {
    * @param {String} requesterId Requester Id.
    */
   cancelQueryByRequester(requesterId) {
-    const liveQueries = _selectors.liveQueriesByRequester({
-      state: this.store.getState(),
-      requesterId,
-    });
+    const liveQueries = _selectors.liveQueriesByRequester(this.store.getState(),requesterId);
     forEach(liveQueries, (id) => {
       this.__cancel(id);
     });
-    this.store.dispatch(_actions.cancelQuery({ requesterId }));
+    cancelQueryActionDispatcher({ requesterId }, this.store);
   }
 
   /**
@@ -218,6 +215,7 @@ class FirestoreRedux {
       (path.match(/\//g) || []).length % 2 === 0
     );
   };
+
 }
 
 const firestoreRedux = new FirestoreRedux();

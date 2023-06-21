@@ -28,7 +28,6 @@ Reads data from the firestore for given collection/subcollection based on given 
   const query = firestoreRedux.query(
     collection
     {
-      id,
       requesterId,
       collection,
       where,
@@ -48,7 +47,7 @@ Reads data from the firestore for given collection/subcollection based on given 
 
 - `collection (String)` Collection or subcollection ID. It cannot contain a slash. It is mandatory.
 - `queryCriteria (Object)`: Optional. If not provided, reads all documents of given collection/subcollection.
-  - `id (String)` Query Id.
+
   - `requesterId (String)` Requester Id.
   - `where (Array)` List of where conditions. e.g. `[['firstName', '==', 'Nirmal'], ['lastName', '==', 'Baldaniya']]`.
   - `orderBy (Array)` List of orderBy fields. e.g. `[['lastSeen', 'asc'], ['age', 'desc']]`.
@@ -88,7 +87,6 @@ const query = firestoreRedux.getDocById(collection, docId, { requesterId });
 - `collectionPath (String)` Collection or subcollection path. e.g. `users` or `boards/$boardId/cards`.
 - `docId (String)` Document ID.
 - `options (Object)` Options
-  - `id (String)` Query Id.
   - `requesterId (String)` Requester Id.
   - `once (Boolean)` `true` When query is not realtime.
   - `waitTillSucceed (Boolean)` When it's `true`, retries query based on `readPollingConfig`.
@@ -151,7 +149,7 @@ firestoreRedux.save(collectionPath, docs, options);
 
 - `collectionPath (String)` Collection / Subcollection path. if it's subcollection, it's `/` sepereted path upto subcollection. e.g. `boards/$boardId/cards`
 - `docs (Object|Array)` Single document or List of documents to be saved or updated.
-- `options (Object)`. Save options. e.g. `{ localWrite: true, remoteWrite: true }` By default `localWrite` & `remoteWrite` both are `true`.
+- `options (Object)`. Save options. e.g. `{ localWrite: true, remoteWrite: true, queryId }` By default `localWrite` & `remoteWrite` both are `true`. When `queryId` is provided, updates query result as well.
 
 ##### returns
 
@@ -169,7 +167,7 @@ firestoreRedux.delete(collectionPath, docIds, options);
 
 - `collectionPath (String)` Collection / Subcollection path.
 - `docIds (String|Array)` Single doc Id or List of document Ids.
-- `options (Object)`. Save options. e.g. `{ localWrite: true, remoteWrite: true }` By default `localWrite` & `remoteWrite` both are `true`.
+- `options (Object)`. Save options. e.g. `{ localWrite: true, remoteWrite: true, queryId }` By default `localWrite` & `remoteWrite` both are `true`. When `queryId` is provided, removes docId from query result as well.
 
 ##### returns
 

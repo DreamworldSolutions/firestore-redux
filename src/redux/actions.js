@@ -11,77 +11,41 @@ export const DELETE_FAILED = "FIRESTORE_REDUX_DELETE_FAILED";
 
 /**
  * Stores query with PENDING status.
- * @param {Object} param0
- *  @property {String} id Query Id. It is optional. But if its provided, it must be unique id.
- *  @property {String} collection Collection Id. Id of the collection. It is mandatory.
- *  @property {String} documentId Document Id.
- *  @property {String} requesterId Requester Id.
- *  @property {Array} where List of where conditions. It is optional. e.g. [['firstName', '==', 'Nirmal'], ['lastName', '==', 'Baldaniya']]
- *  @property {Array} orderBy List of orderBy fields. It is optional. e.g. [['firstName'], ['age', 'desc']]
- *  @property {Any} startAt The field values to start this query at, in order of the query's order by. It is optional.
- *  @property {Any} startAfter The field values to start this query after, in order of the query's order by. It is optional.
- *  @property {Any} endAt The field values to end this query at, in order of the query's order by. It is optional.
- *  @property {Any} endBefore The field values to end this query before, in order of the query's order by. It is optional.
- *  @property {Number} limit The maximum number of items to return. It is optional.
- *  @property {Boolean} once When `true`, does not subscribe for realtime changes. It is optional.
- *  @property {Boolean} waitTillSucceed When `true`, retries query until it's timeout or cross maximum attempts.
+ * @param {query[]} queries
+ *  @property {String} query.id Query Id. It is optional. But if its provided, it must be unique id.
+ *  @property {String} query.collection Collection Id. Id of the collection. It is mandatory.
+ *  @property {String} query.documentId Document Id.
+ *  @property {String} query.requesterId Requester Id.
+ *  @property {Array} query.where List of where conditions. It is optional. e.g. [['firstName', '==', 'Nirmal'], ['lastName', '==', 'Baldaniya']]
+ *  @property {Array} query.orderBy List of orderBy fields. It is optional. e.g. [['firstName'], ['age', 'desc']]
+ *  @property {Any} query.startAt The field values to start this query at, in order of the query's order by. It is optional.
+ *  @property {Any} query.startAfter The field values to start this query after, in order of the query's order by. It is optional.
+ *  @property {Any} query.endAt The field values to end this query at, in order of the query's order by. It is optional.
+ *  @property {Any} query.endBefore The field values to end this query before, in order of the query's order by. It is optional.
+ *  @property {Number} query.limit The maximum number of items to return. It is optional.
+ *  @property {Boolean} query.once When `true`, does not subscribe for realtime changes. It is optional.
+ *  @property {Boolean} query.waitTillSucceed When `true`, retries query until it's timeout or cross maximum attempts.
  */
-export const query = ({
-  id,
-  collection,
-  documentId,
-  requesterId,
-  where,
-  orderBy,
-  startAt,
-  startAfter,
-  endAt,
-  endBefore,
-  limit,
-  once,
-  waitTillSucceed,
-}) => {
+export const query = (value) => {
   return {
     type: QUERY,
-    id,
-    collection,
-    documentId,
-    requesterId,
-    where,
-    orderBy,
-    startAt,
-    startAfter,
-    endAt,
-    endBefore,
-    limit,
-    once,
-    waitTillSucceed,
+    value,
   };
 };
 
 /**
  * Updates query result, status & documents in given collection.
- * @param {Object} param0
- *  @property {String} id Query Id
- *  @property {String} collection Collection Id
- *  @property {Array} docs List of documents. e.g. [{ id, data, newIndex, oldIndex}, {id, data: undefined, newIndex, oldIndex}, ...]
- *  @property {String} status Query Status. When query is for once, it is 'CLOSED' otherwise its 'LIVE'.
+ * @param {query[]} param0
+ *  @property {String} query.id Query Id
+ *  @property {String} query.collection Collection Id
+ *  @property {Array} query.docs List of documents. e.g. [{ id, data, newIndex, oldIndex}, {id, data: undefined, newIndex, oldIndex}, ...]
+ *  @property {String} query.status Query Status. When query is for once, it is 'CLOSED' otherwise its 'LIVE'.
  * @private
  */
-export const _querySnapShot = ({
-  id,
-  collection,
-  docs,
-  status,
-  requesterId,
-}) => {
+export const _querySnapShot = (value) => {
   return {
     type: QUERY_SNAPSHOT,
-    id,
-    collection,
-    docs,
-    status,
-    requesterId,
+    value,
   };
 };
 
@@ -103,15 +67,14 @@ export const _queryFailed = ({ id, error }) => {
 /**
  * Cancels queries by it's id/requester id.
  * One of the property must have: either `id` or `requesterId`
- * @param {String} id Query Id
- *  @property {String} id Query Id.
- *  @property {String} requesterId Requester Id.
+ * @param {payload[]} id Query Id
+ *  @property {String} payload.id Query Id.
+ *  @property {String} payload.requesterId Requester Id.
  */
-export const cancelQuery = ({ id, requesterId }) => {
+export const cancelQuery = (value) => {
   return {
     type: CANCEL_QUERY,
-    id,
-    requesterId,
+    value
   };
 };
 
