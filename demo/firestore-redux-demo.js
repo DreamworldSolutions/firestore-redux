@@ -229,6 +229,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
           <dw-input
             dense
             label="Where"
+            value=${this._query.where}
             placeholder="Enter where conditions. e.g. [['name', '==', 'Nirmal'], ['age', '<=', 30]]"
             @value-changed=${(e) => {
               this._query.where = e.detail.value;
@@ -246,7 +247,6 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
           <dw-input
             dense
             label="Start At"
-            value=${this._query.where}
             placeholder="Enter the field value to start this query at, in order of the query's order by"
             @value-changed=${(e) => {
               this._query.startAt = isNaN(e.detail.value)
