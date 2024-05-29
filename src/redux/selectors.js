@@ -37,50 +37,6 @@ export const allDocs = createSelector(
 export const collection = (state, collection) =>
   get(state, `firestore.docs.${collection}`);
 
-/**
- * @param0
- *  @property {Object} state Redux state.
- *  @property {String} queryId Query Id
- * @returns {Array} All documents of given query Id.
- */
-export const docsByQuery = createSelector(
-  (state, queryId) => get(state, `firestore.queries.${queryId}.collection`),
-  (state, queryId) => get(state, `firestore.queries.${queryId}.result`),
-  (state, queryId) => get(state, `firestore.docs`),
-  (queryCollection, queryResult, allDocs) => {
-    if(!queryCollection) {
-      return [];
-    }
-
-    allDocs = get(allDocs, queryCollection);
-    let docs = [];
-    forEach(queryResult, (docId) => {
-      allDocs && docs.push(allDocs[docId]);
-    });
-    return docs;
-  },
-  { maxSize: 500, resultEqualityCheck: isEqual }
-);
-
-/**
- * @param0
- *  @property {Object} state Redux state.
- *  @property {String} queryId Query Id
- *  @property {String} collection collection name.
- * @returns {Array} All documents of given query Id.
- */
-export const docsByQueryResult = createSelector(
-  (state, queryId) => get(state, `firestore.queries.${queryId}.result`),
-  (state, queryId, collection) => get(state, `firestore.docs.${collection}`),
-  (result, allDocs) => {
-    let docs = [];
-    forEach(result, (docId) => {
-      allDocs && docs.push(allDocs[docId]);
-    });
-    return docs;
-  },
-  { maxSize: 1000, resultEqualityCheck: isEqual }
-);
 
 /**
  * @param {Object} state Redux State.
@@ -105,11 +61,76 @@ export const queryStatus = (state, id) => get(state, `firestore.queries.${id}.st
 export const queryError = (state, id) => get(state, `firestore.queries.${id}.error`, {});
 
 /**
+ * @param {Object} state
+ * @param {String} id Query Id
+ * @returns {Array} Local write result.
+ */
+export const localWriteResult = (state, id) => get(state, `firestore.queries.${id}.localWriteResult`, []);
+
+/**
+ * @param {Object} state
+ * @param {String} id Query Id
+ * @returns {Array} Pending result.
+ */
+export const pendingResult = (state, id) => get(state, `firestore.queries.${id}.pendingResult`, []);
+
+/**
  * @param {Object} state Redux state.
  * @param {String} id Query ID
  * @returns {Array} Query result
  */
-export const queryResult = (state, id) => get(state, `firestore.queries.${id}.result`, []);
+export const queryResult = createSelector(
+  (state, id) => get(state, `firestore.queries.${id}.result`, []),
+  localWriteResult,
+  (result, localResult) => {
+    return [...result, ...localResult];
+  },
+  { maxSize: 500, resultEqualityCheck: isEqual });
+
+/**
+ * @param0
+ *  @property {Object} state Redux state.
+ *  @property {String} queryId Query Id
+ * @returns {Array} All documents of given query Id.
+ */
+export const docsByQuery = createSelector(
+  (state, queryId) => get(state, `firestore.queries.${queryId}.collection`),
+  queryResult,
+  (state, queryId) => get(state, `firestore.docs`),
+  (queryCollection, queryResult, allDocs) => {
+    if(!queryCollection) {
+      return [];
+    }
+
+    allDocs = get(allDocs, queryCollection);
+    let docs = [];
+    forEach(queryResult, (docId) => {
+      allDocs && docs.push(allDocs[docId]);
+    });
+    return docs;
+  },
+  { maxSize: 500, resultEqualityCheck: isEqual }
+);
+
+/**
+ * @param0
+ *  @property {Object} state Redux state.
+ *  @property {String} queryId Query Id
+ *  @property {String} collection collection name.
+ * @returns {Array} All documents of given query Id.
+ */
+export const docsByQueryResult = createSelector(
+  queryResult,
+  (state, queryId, collection) => get(state, `firestore.docs.${collection}`),
+  (result, allDocs) => {
+    let docs = [];
+    forEach(result, (docId) => {
+      allDocs && allDocs[docId] && docs.push(allDocs[docId]);
+    });
+    return docs;
+  },
+  { maxSize: 1000, resultEqualityCheck: isEqual }
+);
 
 /**
  * @param {String} requesterId Requester Id
@@ -155,13 +176,16 @@ const _anotherLiveQueriesResult = createSelector(
   (allQueries, collection, queryId) => {
     let docIds = [];
     forEach(allQueries, (query) => {
+      const result = query.result || [];
+      const localResult = query.localWriteResult || [];
+      const result2 = [...result, ...localResult];
       if (
         queryId !== query.id &&
         query.collection === collection &&
-        query.result &&
+        result2 && result2.length &&
         query.status === "LIVE"
       ) {
-        docIds.push(...query.result);
+        docIds.push(...result2);
       }
     });
     return uniq(docIds);

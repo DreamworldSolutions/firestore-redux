@@ -1,7 +1,7 @@
-import debounce from "lodash-es/debounce";
+import debounce from "lodash-es/debounce.js";
 import * as actions from "./redux/actions.js";
 
-let actionPayload = [];
+export let actionPayload = [];
 let store;
 
 const actionDispatcher = (data, _store) => {
@@ -16,6 +16,6 @@ const dispatchSnapshot = () => {
   store.dispatch(actions._querySnapShot(_actionPayload));
 };
 
-const actionDispatcherDebounce = debounce(dispatchSnapshot, 50, { maxWait: 2000 });
+const actionDispatcherDebounce = debounce(dispatchSnapshot, 50, { maxWait: 1000 });
 
 export default actionDispatcher;
