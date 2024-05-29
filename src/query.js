@@ -4,8 +4,9 @@ import forEach from "lodash-es/forEach.js";
 import get from "lodash-es/get.js";
 import isEmpty from "lodash-es/isEmpty.js";
 import map from 'lodash-es/map.js';
+import find from 'lodash-es/find.js';
 import { retry as reAttempt } from "@lifeomic/attempt";
-import queryActionDispatcher from "./query-action-dispatcher.js";
+import queryActionDispatcher, { actionPayload as querytActionPayload} from "./query-action-dispatcher.js";
 import snapshotActionDispatcher from "./snapshot-action-dispatcher.js";
 
 import {
@@ -98,13 +99,13 @@ class Query {
               id = null;
             }
           }, 50);
-  
+
           setTimeout(() => {
             if(id){
               clearInterval(id);
               resolve([]);
             }
-          }, 10000);
+          }, 30000);
         })
       }
     }
@@ -394,7 +395,7 @@ class Query {
 
     if (!this._criteria.waitTillSucceed) {
       this.__dispatchQueryFailed(error);
-      this._reject(`${error} for collection: ${this._collection}`);
+      this._reject(`${error} for collection: ${this._collection}, criteria: ${JSON.stringify(this._criteria)}`);
       return;
     }
 
@@ -449,7 +450,7 @@ class Query {
       );
     } catch (error) {
       this.__dispatchQueryFailed(error);
-      this._reject(`${error} for collection: ${this._collection}`);
+      this._reject(`${error} for collection: ${this._collection}, criteria: ${JSON.stringify(this._criteria)}`);
     }
   }
 
@@ -458,6 +459,9 @@ class Query {
    * @private
    */
   __unsubscribe() {
+    if(!!find(querytActionPayload, {id: this.id})) {
+      return;
+    }
     this._unsubscribe && this._unsubscribe();
     this._unsubscribe = undefined;
   }

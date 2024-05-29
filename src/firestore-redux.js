@@ -1,8 +1,7 @@
-import { uuidBase62 } from "@dreamworld/uuid-base62/uuid-base62.js";
 import * as _actions from "./redux/actions.js";
 import * as _selectors from "./redux/selectors.js";
 import firestoreReducer from "./redux/reducers.js";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore } from "firebase/firestore";
 import Query from "./query.js";
 import GetDocById from "./get-doc-by-id.js";
 import SaveDocs from "./save-docs.js";
@@ -41,7 +40,7 @@ class FirestoreRedux {
     }
     this.store = store;
     store.addReducers({ firestore: firestoreReducer });
-    this.db = getFirestore(firebaseApp);
+    this.db = initializeFirestore(firebaseApp, {});
     this.readPollingConfig = merge(this._readPollingConfig, readPollingConfig);
   }
 

@@ -6,8 +6,10 @@ import {
   onSnapshot,
 } from "firebase/firestore";
 import { retry as reAttempt } from "@lifeomic/attempt";
-import queryActionDispatcher from "./query-action-dispatcher.js";
+import queryActionDispatcher, { actionPayload as querytActionPayload} from "./query-action-dispatcher.js";
 import snapshotActionDispatcher from "./snapshot-action-dispatcher.js";
+import isEmpty from "lodash-es/isEmpty.js";
+import find from 'lodash-es/find.js';
 
 class GetDocById {
   constructor(store, db, pollingConfig) {
@@ -57,6 +59,28 @@ class GetDocById {
         this._resolve = resolve;
         this._reject = reject;
       });
+
+      this.waitTillResultAvailableInState = () => {
+        return new Promise((resolve) => {
+          let id = setInterval(() => {
+            const state = this.store.getState();
+            const status = selectors.queryStatus(state, this.id);
+            const result = selectors.queryResult(state, this.id);
+            if(!isEmpty(result) || status === 'LIVE' || status === 'CLOSED') {
+              resolve(result);
+              clearInterval(id);
+              id = null;
+            }
+          }, 50);
+
+          setTimeout(() => {
+            if(id){
+              clearInterval(id);
+              resolve([]);
+            }
+          }, 30000);
+        })
+      }
     }
 
     if (options.once) {
@@ -280,6 +304,9 @@ class GetDocById {
    * @private
    */
   __unsubscribe() {
+    if(!!find(querytActionPayload, {id: this.id})) {
+      return;
+    }
     this._unsubscribe && this._unsubscribe();
     this._unsubscribe = undefined;
   }

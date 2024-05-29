@@ -3,10 +3,14 @@ import * as actions from "./actions.js";
 import * as selectors from './selectors.js';
 import isEmpty from "lodash-es/isEmpty.js";
 import get from "lodash-es/get.js";
+import map from 'lodash-es/map.js';
 import forEach from "lodash-es/forEach.js";
 import isEqual from "lodash-es/isEqual.js";
 import without from "lodash-es/without.js";
+import unionWith from "lodash-es/unionWith.js";
+import uniqWith from "lodash-es/uniqWith.js";
 import cloneDeep from "lodash-es/cloneDeep.js";
+import difference from 'lodash-es/difference.js';
 import { ReduxUtils } from "@dreamworld/pwa-helpers/redux-utils.js";
 
 const firestoreReducer = (state = INITIAL_STATE, action) => {
@@ -33,7 +37,8 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
                 waitTillSucceed: query.waitTillSucceed,
               },
               result: get(state, `queries.${query.id}.result`),
-              status: "PENDING",
+              localWriteResult: get(state, `queries.${query.id}.localWriteResult`),
+              status: get(state, `queries.${query.id}.status`) === "LIVE" ? "LIVE": "PENDING",
               once: query.once,
             },
           },
@@ -44,6 +49,9 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
     case actions.QUERY_SNAPSHOT:
       forEach(action.value, (snapshot) => {
         const oldStatus = get(state, `queries.${snapshot.id}.status`);
+        const oldLocalWriteResult = get(state, `queries.${snapshot.id}.localWriteResult`, []);
+        const oldResult = get(state, `queries.${snapshot.id}.result`, []);
+
         // Updates query status to LIVE or CLOSED.
         state = ReduxUtils.replace(
           state,
@@ -51,12 +59,42 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
           snapshot.status
         );
 
-        const oldResult = get(state, `queries.${snapshot.id}.result`, []);
-        let newResult = oldStatus === 'PENDING' ? []: [...oldResult];
+        if(snapshot.removePendingResult) {
+          state = ReduxUtils.replace(state, `queries.${snapshot.id}.pendingResult`, undefined);
+        }
 
-        // Updates query result.
+        let pendingResult = [];
+        if(!oldStatus || oldStatus === 'CLOSED') {
+          const oldPendingDocIds = get(state, `queries.${snapshot.id}.pendingResult.docIds`, []);
+          const oldPendingDocs = get(state, `queries.${snapshot.id}.pendingResult.docs`, []);
+
+          const docs = snapshot.docs || [];
+          const docIds = map(docs, 'id');
+
+          state = ReduxUtils.replace(state, `queries.${snapshot.id}.pendingResult`, {
+            id: snapshot.id,
+            collection: snapshot.collection,
+            requesterId: snapshot.requesterId,
+            docs: uniqWith(unionWith(docs, oldPendingDocs, isEqual), (doc1, doc2) => isEqual(doc1, doc2) || doc1.id == doc2.id),
+            docIds: [...oldPendingDocIds, ...docIds],
+            status: snapshot.status
+          });
+        } else {
+          pendingResult = get(state, `queries.${snapshot.id}.pendingResult.docIds`, []);
+          state = ReduxUtils.replace(state, `queries.${snapshot.id}.pendingResult`, undefined);
+        }
+
+        let newLocalWriteResult = [...oldLocalWriteResult];
+        let newResult = oldStatus === 'PENDING' ? pendingResult: [...oldResult];
+
+        // Updates query result (localWriteResult + result).
         forEach(snapshot.docs, (doc) => {
           if (doc.data) {
+            // Remove result from localWrite
+            if(newLocalWriteResult.length && doc.newIndex !== -1) {
+              newLocalWriteResult = without(newLocalWriteResult, doc.id);
+            }
+
             // When new doc is added or result order is changed.
             if (doc.newIndex !== -1 && newResult[doc.newIndex] !== doc.id) {
               // Remove docId from older index.
@@ -74,6 +112,14 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
           }
         });
 
+        if (!isEqual(oldLocalWriteResult, newLocalWriteResult)) {
+          state = ReduxUtils.replace(
+            state,
+            `queries.${snapshot.id}.localWriteResult`,
+            newLocalWriteResult
+          );
+        }
+
         if (!isEqual(oldResult, newResult)) {
           state = ReduxUtils.replace(
             state,
@@ -82,6 +128,7 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
           );
         }
 
+        const removeDocs = [];
         // Updates only those documents which are actually changed.
         forEach(snapshot.docs, (doc) => {
           if (!isEqual(doc.data,get(state, `docs.${snapshot.collection}.${doc.id}`))) {
@@ -91,12 +138,15 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
               let allQueries = get(state, "queries");
               let liveQueriesResult = selectors.anotherLiveQueriesResult({
                 allQueries,
-                collection: action.collection,
-                queryId: action.id,
+                collection: snapshot.collection,
+                queryId: snapshot.id,
               });
+
               if (liveQueriesResult.includes(doc.id)) {
                 return;
               }
+
+              removeDocs.push(doc.id);
             }
 
             state = ReduxUtils.replace(
@@ -106,6 +156,34 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
             );
           }
         });
+
+        //Remove docs when is remove form new results.
+        if (!isEqual(oldResult, newResult) && !isEmpty(oldResult)) {
+          let _diff = difference(oldResult, newResult);
+          if(!isEmpty(_diff)) {
+            _diff = difference(_diff, removeDocs);
+            if(!isEmpty(_diff)) {
+              forEach(_diff, (docId) => {
+                let allQueries = get(state, "queries");
+                let liveQueriesResult = selectors.anotherLiveQueriesResult({
+                  allQueries,
+                  collection: snapshot.collection,
+                  queryId: snapshot.id,
+                });
+
+                if (liveQueriesResult.includes(docId)) {
+                  return;
+                }
+  
+                state = ReduxUtils.replace(
+                  state,
+                  `docs.${snapshot.collection}.${docId}`,
+                  undefined
+                );
+              });
+            }
+          }
+        }
       });
 
       return state;
@@ -166,14 +244,15 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
 
         // Localwrite query result when queryId is provided in options.
         if(action.options.queryId) {
+          const queryLocalWriteResultPath = `queries.${action.options.queryId}.localWriteResult`;
           const queryResultPath = `queries.${action.options.queryId}.result`;
+          const localWriteQueryResult = get(state, queryLocalWriteResultPath, []);
           const queryResult = get(state, queryResultPath, []);
-          if(!queryResult.includes(doc.id)) {
-            state = ReduxUtils.replace(state, queryResultPath, [...queryResult, doc.id]);
+          if(!localWriteQueryResult.includes(doc.id) && !queryResult.includes(doc.id)) {
+            state = ReduxUtils.replace(state, queryLocalWriteResultPath, [...localWriteQueryResult, doc.id]);
           }
         }
       });
-
 
       return state;
 
@@ -214,6 +293,17 @@ const firestoreReducer = (state = INITIAL_STATE, action) => {
             path,
             without(result, docId)
           );
+
+          // Remove docId from localWriteResult.
+          const _localResult = get(state, `queries.${action.options.queryId}.localWriteResult`, []);
+          if(_localResult.length) {
+            state = ReduxUtils.replace(
+              state,
+              `queries.${action.options.queryId}.localWriteResult`,
+              without(_localResult, docId)
+            );
+          }
+
         }
       });
       return state;
