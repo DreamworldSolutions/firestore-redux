@@ -2,7 +2,7 @@ version: 2
 jobs:
   release-snapshot:
     docker:
-      - image: circleci/node:lts
+      - image: cimg/node:lts
     steps:
       - checkout
       - run: yarn install --frozen-lockfile --non-interactive
@@ -14,7 +14,7 @@ jobs:
             npx semantic-release
   release:
     docker:
-      - image: circleci/node:lts
+      - image: cimg/node:lts
     steps:
       - checkout
       - run: yarn install --frozen-lockfile --non-interactive
