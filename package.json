@@ -21,7 +21,7 @@
     "@dreamworld/pwa-helpers": "^1.14.0",
     "@dreamworld/uuid-base62": "^1.1.1",
     "@lifeomic/attempt": "^3.0.2",
-    "firebase": "^10.12.4",
+    "firebase": "^10.13.1",
     "lodash-es": "^4.17.21",
     "redux": "^4.2.0",
     "reselect": "^4.1.8"
