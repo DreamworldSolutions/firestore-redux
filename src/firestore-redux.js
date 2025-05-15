@@ -12,6 +12,11 @@ import isEmpty from "lodash-es/isEmpty.js";
 import isObject from "lodash-es/isObject.js";
 import isArray from "lodash-es/isArray.js";
 import cancelQueryActionDispatcher from "./cancel-query-action-dispatcher.js";
+import { 
+  isFirebaseClientTerminated, 
+  resetFirebaseTerminated 
+} from "./firebase-status-utility.js";
+
 class FirestoreRedux {
   constructor() {
     /**
@@ -26,6 +31,9 @@ class FirestoreRedux {
 
     // Default configuration for wait till read succeed query.
     this._readPollingConfig = { timeout: 30000, maxAttempts: 20 };
+    
+    // Firebase app reference
+    this.firebaseApp = null;
   }
 
   /**
@@ -40,8 +48,26 @@ class FirestoreRedux {
     }
     this.store = store;
     store.addReducers({ firestore: firestoreReducer });
-    this.db = initializeFirestore(firebaseApp, {});
+    this.firebaseApp = firebaseApp;
+    this.reinitializeFirestore();
     this.readPollingConfig = merge(this._readPollingConfig, readPollingConfig);
+  }
+
+  /**
+   * Reinitialize Firestore instance
+   * This can be called when we detect the client has been terminated
+   */
+  reinitializeFirestore() {
+    if (!this.firebaseApp) {
+      return;
+    }
+    
+    try {
+      this.db = initializeFirestore(this.firebaseApp, {});
+      resetFirebaseTerminated();
+    } catch (error) {
+      console.error("Failed to reinitialize Firestore:", error);
+    }
   }
 
   /**
@@ -62,8 +88,13 @@ class FirestoreRedux {
       throw "firestore-redux > query : collection is not provided";
     }
 
+    // If client is terminated, reinitialize
+    if (isFirebaseClientTerminated()) {
+      this.reinitializeFirestore();
+    }
+
     const id = (criteria && criteria.id) || selectors.getQueryId({collection, criteria});
-    const instance = new Query(this.store, this.db, this.readPollingConfig);
+    const instance = new Query(this.store, this.db, this.readPollingConfig, this);
     this._queries[id] = instance;
     instance.query(id, collection, criteria);
     this._queries[id] = instance;
@@ -92,11 +123,17 @@ class FirestoreRedux {
       throw `firestore-redux > getDocById > Collection/Subcollection path is not valid. ${collectionPath}`;
     }
 
+    // If client is terminated, reinitialize
+    if (isFirebaseClientTerminated()) {
+      this.reinitializeFirestore();
+    }
+
     const id = (options && options.id) || selectors.getQueryId({collection: collectionPath, criteria: { documentId, once: options && options.once }});
     const instance = new GetDocById(
       this.store,
       this.db,
-      this.readPollingConfig
+      this.readPollingConfig,
+      this
     );
     this._queries[id] = instance;
     instance.getDoc(id, collectionPath, documentId, options);

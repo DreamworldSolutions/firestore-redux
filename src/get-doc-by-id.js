@@ -10,9 +10,13 @@ import queryActionDispatcher, { actionPayload as querytActionPayload} from "./qu
 import snapshotActionDispatcher from "./snapshot-action-dispatcher.js";
 import isEmpty from "lodash-es/isEmpty.js";
 import find from 'lodash-es/find.js';
+import { 
+  withTerminationHandling, 
+  setFirebaseTerminated 
+} from "./firebase-status-utility.js";
 
 class GetDocById {
-  constructor(store, db, pollingConfig) {
+  constructor(store, db, pollingConfig, firestoreRedux) {
     /**
      * A redux store which holds the whole state tree of firestore.
      */
@@ -21,6 +25,8 @@ class GetDocById {
     this.pollingConfig = pollingConfig;
     // `unsubscribe` method returned by firestore onSnapshot.
     this._unsubscribe = undefined;
+    // Reference to firestoreRedux instance
+    this.firestoreRedux = firestoreRedux;
   }
 
   /**
@@ -121,7 +127,27 @@ class GetDocById {
   async __getOnce({ id, collection, pathSegments, documentId }) {
     try {
       const docRef = fsDoc(this.db, ...pathSegments, documentId);
-      const doc = await fsGetDoc(docRef);
+      
+      const handleTerminated = () => {
+        // If client is terminated, reinitialize and retry
+        if (this.firestoreRedux) {
+          this.firestoreRedux.reinitializeFirestore();
+          this.db = this.firestoreRedux.db;
+          this.retry();
+        }
+        return null;
+      };
+
+      const doc = await withTerminationHandling(
+        () => fsGetDoc(docRef),
+        handleTerminated
+      );
+
+      // If handling termination returned null
+      if (!doc) {
+        return;
+      }
+
       if (
         !this._options.waitTillSucceed ||
         (this._options.waitTillSucceed && doc.exists())
@@ -160,6 +186,18 @@ class GetDocById {
         });
       }
     } catch (error) {
+      // Check if this is a terminated client error before general error handling
+      if (error && error.code === 'failed-precondition' && 
+          error.message && error.message.includes('client has already been terminated')) {
+        setFirebaseTerminated();
+        if (this.firestoreRedux) {
+          this.firestoreRedux.reinitializeFirestore();
+          this.db = this.firestoreRedux.db;
+          this.retry();
+        }
+        return;
+      }
+      
       this.__onRequestFailed(error);
     }
   }
@@ -171,54 +209,83 @@ class GetDocById {
    */
   __getRealTime({ id, collection, pathSegments, documentId }) {
     let resolved;
-    this._unsubscribe = onSnapshot(
-      fsDoc(this.db, ...pathSegments, documentId),
-      async (doc) => {
-        if (
-          !this._options.waitTillSucceed ||
-          (this._options.waitTillSucceed && doc.exists())
-        ) {
-          const docs = [
-            {
-              id: doc.id,
-              data: doc.data() || null,
-              newIndex: 0,
-              oldIndex: -1,
-            },
-          ];
+    
+    try {
+      this._unsubscribe = onSnapshot(
+        fsDoc(this.db, ...pathSegments, documentId),
+        async (doc) => {
+          if (
+            !this._options.waitTillSucceed ||
+            (this._options.waitTillSucceed && doc.exists())
+          ) {
+            const docs = [
+              {
+                id: doc.id,
+                data: doc.data() || null,
+                newIndex: 0,
+                oldIndex: -1,
+              },
+            ];
 
-          this.__dispatchQuerySnapshot({
-            id,
-            collection,
-            docs,
-            status: "LIVE",
-            requesterId: this.requesterId,
-          });
+            this.__dispatchQuerySnapshot({
+              id,
+              collection,
+              docs,
+              status: "LIVE",
+              requesterId: this.requesterId,
+            });
 
-          if (!resolved) {
-            const result = doc.data();
-            this._resolve(result);
-            if (this._options.waitTillSucceed) {
-              this._retryResolve(result);
+            if (!resolved) {
+              const result = doc.data();
+              this._resolve(result);
+              if (this._options.waitTillSucceed) {
+                this._retryResolve(result);
+              }
+              resolved = true;
             }
-            resolved = true;
+            return;
           }
-          return;
-        }
 
-        if (!this._waiting) {
-          this.__retryTillSucceed();
-        } else {
-          this._retryReject({
-            code: "NOT_FOUND",
-            message: `Document: ${this._documentId} not found after retry in collection path: ${this._collectionPath}`,
-          });
+          if (!this._waiting) {
+            this.__retryTillSucceed();
+          } else {
+            this._retryReject({
+              code: "NOT_FOUND",
+              message: `Document: ${this._documentId} not found after retry in collection path: ${this._collectionPath}`,
+            });
+          }
+        },
+        (error) => {
+          // Check if this is a terminated client error
+          if (error && error.code === 'failed-precondition' && 
+              error.message && error.message.includes('client has already been terminated')) {
+            setFirebaseTerminated();
+            if (this.firestoreRedux) {
+              this.firestoreRedux.reinitializeFirestore();
+              this.db = this.firestoreRedux.db;
+              this.retry();
+            }
+            return;
+          }
+          
+          this.__onRequestFailed(error);
         }
-      },
-      (error) => {
-        this.__onRequestFailed(error);
+      );
+    } catch (error) {
+      // Check if this is a terminated client error
+      if (error && error.code === 'failed-precondition' && 
+          error.message && error.message.includes('client has already been terminated')) {
+        setFirebaseTerminated();
+        if (this.firestoreRedux) {
+          this.firestoreRedux.reinitializeFirestore();
+          this.db = this.firestoreRedux.db;
+          this.retry();
+        }
+        return;
       }
-    );
+      
+      this.__onRequestFailed(error);
+    }
   }
 
   /**

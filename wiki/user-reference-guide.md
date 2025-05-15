@@ -20,6 +20,22 @@ firestoreRedux.init(store, firebaseApp);
 
 - Nothing
 
+### `firestoreRedux.reinitializeFirestore`
+
+Reinitializes the Firestore client when the previous client has been terminated. This is called automatically when a terminated client is detected but can also be called manually.
+
+```js
+firestoreRedux.reinitializeFirestore();
+```
+
+##### Arguments
+
+- None
+
+##### returns
+
+- Nothing
+
 ### `firestoreRedux.query`
 
 Reads data from the firestore for given collection/subcollection based on given query criteria.

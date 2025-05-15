@@ -4,6 +4,7 @@ import { doc as fsDoc, writeBatch } from "firebase/firestore";
 import get from "lodash-es/get.js";
 import forEach from "lodash-es/forEach.js";
 import { uuidBase62 } from '@dreamworld/uuid-base62/uuid-base62.js';
+import { withTerminationHandling, setFirebaseTerminated } from "./firebase-status-utility.js";
 
 class SaveDocs {
   constructor(store, db) {
@@ -72,8 +73,24 @@ class SaveDocs {
       const ref = fsDoc(this.db, ...pathSegments, doc.id);
       batch.set(ref, doc);
     });
+
     try {
-      await batch.commit();
+      const handleTerminated = async () => {
+        // If this is a terminated client error, retry with fresh client
+        if (window.firestoreRedux) {
+          setFirebaseTerminated();
+          window.firestoreRedux.reinitializeFirestore();
+          this.db = window.firestoreRedux.db;
+          return this.__remoteWrite(collectionPath, docs, prevState, options);
+        }
+        throw new Error("Unable to save - Firebase client terminated");
+      };
+
+      await withTerminationHandling(
+        () => batch.commit(),
+        handleTerminated
+      );
+      
       this.store.dispatch(actions._saveDone(collection, docs));
       this._resolve(docs);
     } catch (error) {

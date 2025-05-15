@@ -2,6 +2,8 @@ import * as actions from "./redux/actions.js";
 import { doc as fsDoc, writeBatch } from "firebase/firestore";
 import forEach from "lodash-es/forEach.js";
 import get from "lodash-es/get.js";
+import { withTerminationHandling, setFirebaseTerminated } from "./firebase-status-utility.js";
+
 class DeleteDocs {
   constructor(store, db) {
     /**
@@ -62,7 +64,22 @@ class DeleteDocs {
     });
 
     try {
-      await batch.commit();
+      const handleTerminated = async () => {
+        // If this is a terminated client error, retry with fresh client
+        if (window.firestoreRedux) {
+          setFirebaseTerminated();
+          window.firestoreRedux.reinitializeFirestore();
+          this.db = window.firestoreRedux.db;
+          return this.__remoteDelete(collectionPath, docIds, prevState, options);
+        }
+        throw new Error("Unable to delete - Firebase client terminated");
+      };
+
+      await withTerminationHandling(
+        () => batch.commit(),
+        handleTerminated
+      );
+      
       this.store.dispatch(actions._deleteDone(collection, docIds));
       this._resolve(docIds);
     } catch (error) {

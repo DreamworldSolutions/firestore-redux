@@ -8,6 +8,10 @@ import find from 'lodash-es/find.js';
 import { retry as reAttempt } from "@lifeomic/attempt";
 import queryActionDispatcher, { actionPayload as querytActionPayload} from "./query-action-dispatcher.js";
 import snapshotActionDispatcher from "./snapshot-action-dispatcher.js";
+import { 
+  withTerminationHandling, 
+  setFirebaseTerminated 
+} from "./firebase-status-utility.js";
 
 import {
   collectionGroup,
@@ -22,8 +26,9 @@ import {
   endBefore as fsEndBefore,
   limit as fsLimit,
 } from "firebase/firestore";
+
 class Query {
-  constructor(store, db, pollingConfig) {
+  constructor(store, db, pollingConfig, firestoreRedux) {
     /**
      * A redux store which holds the whole state tree of firestore.
      */
@@ -32,6 +37,8 @@ class Query {
     this.pollingConfig = pollingConfig;
     // `unsubscribe` method returned by firestore onSnapshot.
     this._unsubscribe = undefined;
+    // Reference to firestoreRedux instance
+    this.firestoreRedux = firestoreRedux;
   }
 
   /**
@@ -180,7 +187,26 @@ class Query {
    */
   async __queryOnce({ q, id, collection }) {
     try {
-      const snapshot = await getDocs(q);
+      const handleTerminated = () => {
+        // If client is terminated, reinitialize and retry
+        if (this.firestoreRedux) {
+          this.firestoreRedux.reinitializeFirestore();
+          this.db = this.firestoreRedux.db;
+          this.retry();
+        }
+        return [];
+      };
+
+      const snapshot = await withTerminationHandling(
+        () => getDocs(q), 
+        handleTerminated
+      );
+      
+      // If handling termination returned an empty result
+      if (!snapshot || !snapshot.forEach) {
+        return;
+      }
+      
       let docs = [];
       let i = 0;
       snapshot.forEach((doc) => {
@@ -192,6 +218,7 @@ class Query {
         });
         i += 1;
       });
+
       if (
         !this._criteria.waitTillSucceed ||
         (this._criteria.waitTillSucceed && !isEmpty(docs))
@@ -221,6 +248,18 @@ class Query {
         });
       }
     } catch (error) {
+      // Check if this is a terminated client error before general error handling
+      if (error && error.code === 'failed-precondition' && 
+          error.message && error.message.includes('client has already been terminated')) {
+        setFirebaseTerminated();
+        if (this.firestoreRedux) {
+          this.firestoreRedux.reinitializeFirestore();
+          this.db = this.firestoreRedux.db;
+          this.retry();
+        }
+        return;
+      }
+      
       this.__onQueryFailed(error);
     }
   }
@@ -232,72 +271,101 @@ class Query {
    */
   __queryRealTime({ q, id, collection }) {
     let queryResolved;
-    this._unsubscribe = onSnapshot(
-      q,
-      async (snapshot) => {
-        const docs = [];
-        snapshot.docChanges().forEach((change) => {
-          if (change.type === "added") {
-            docs.push({
-              id: change.doc.id,
-              data: { ...change.doc.data() },
-              newIndex: change.newIndex,
-              oldIndex: change.oldIndex,
-            });
-          }
-          if (change.type === "modified") {
-            docs.push({
-              id: change.doc.id,
-              data: { ...change.doc.data() },
-              newIndex: change.newIndex,
-              oldIndex: change.oldIndex,
-            });
-          }
-          if (change.type === "removed") {
-            docs.push({
-              id: change.doc.id,
-              data: undefined,
-              newIndex: change.newIndex,
-              oldIndex: change.oldIndex,
-            });
-          }
-        });
-
-        if (
-          !this._criteria.waitTillSucceed ||
-          (this._criteria.waitTillSucceed && !isEmpty(docs))
-        ) {
-          this.__dispatchQuerySnapshot({
-            id,
-            collection,
-            docs,
-            status: "LIVE",
-            requesterId: this.requesterId,
-          });
-          if (!queryResolved) {
-            const result = map(docs, 'data');
-            this._resolve(result);
-            if (this._criteria.waitTillSucceed) {
-              this._retryResolve(result);
+    
+    try {
+      this._unsubscribe = onSnapshot(
+        q,
+        async (snapshot) => {
+          const docs = [];
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === "added") {
+              docs.push({
+                id: change.doc.id,
+                data: { ...change.doc.data() },
+                newIndex: change.newIndex,
+                oldIndex: change.oldIndex,
+              });
             }
-            queryResolved = true;
-          }
-          return;
-        }
-
-        if (!this._waiting) {
-          this.__retryTillSucceed();
-        } else {
-          this._retryReject({
-            code: "NOT_FOUND",
-            message: `Documents not found after retry in collection: ${this._collection}`,
+            if (change.type === "modified") {
+              docs.push({
+                id: change.doc.id,
+                data: { ...change.doc.data() },
+                newIndex: change.newIndex,
+                oldIndex: change.oldIndex,
+              });
+            }
+            if (change.type === "removed") {
+              docs.push({
+                id: change.doc.id,
+                data: undefined,
+                newIndex: change.newIndex,
+                oldIndex: change.oldIndex,
+              });
+            }
           });
+
+          if (
+            !this._criteria.waitTillSucceed ||
+            (this._criteria.waitTillSucceed && !isEmpty(docs))
+          ) {
+            this.__dispatchQuerySnapshot({
+              id,
+              collection,
+              docs,
+              status: "LIVE",
+              requesterId: this.requesterId,
+            });
+            if (!queryResolved) {
+              const result = map(docs, 'data');
+              this._resolve(result);
+              if (this._criteria.waitTillSucceed) {
+                this._retryResolve(result);
+              }
+              queryResolved = true;
+            }
+            return;
+          }
+
+          if (!this._waiting) {
+            this.__retryTillSucceed();
+          } else {
+            this._retryReject({
+              code: "NOT_FOUND",
+              message: `Documents not found after retry in collection: ${this._collection}`,
+            });
+          }
+        },
+        (error) => {
+          // Check if this is a terminated client error
+          if (error && error.code === 'failed-precondition' && 
+              error.message && error.message.includes('client has already been terminated')) {
+            setFirebaseTerminated();
+            if (this.firestoreRedux) {
+              this.firestoreRedux.reinitializeFirestore();
+              this.db = this.firestoreRedux.db;
+              this.retry();
+            }
+            return;
+          }
+          
+          this.__onQueryFailed(error);
         }
-      },
-      (error) => {
-        this.__onQueryFailed(error);
+      );
+    } catch (error) {
+      // Check if this is a terminated client error
+      if (error && error.code === 'failed-precondition' && 
+          error.message && error.message.includes('client has already been terminated')) {
+        setFirebaseTerminated();
+        if (this.firestoreRedux) {
+          this.firestoreRedux.reinitializeFirestore();
+          this.db = this.firestoreRedux.db;
+          this.retry();
+        }
+        return;
       }
-    );
+      
+      this.__onQueryFailed(error);
+    }
   }
 
   /**
