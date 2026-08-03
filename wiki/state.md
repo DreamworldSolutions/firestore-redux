@@ -8,13 +8,13 @@
 | Name    | Data Type                 | Description   |
 | ------- | ------------------------- | ------------- |
 | docs    | [Collection](#collection) |               |
-| queries | Hash of [`Query`](#query) | key = QueryId |
+| queries | [`Query`](#query) | key = QueryId |
 
 ### Collection
 
 | Name          | Data Type        | Description                        |
 | ------------- | ---------------- | ---------------------------------- |
-| $collectionId | Hash of Document | key = documentId, value = Document |
+| $collectionId | Document | key = documentId, value = Document |
 
 > Where `Document` is same as FireStore document. But, when it's not yet synced/saved with the server at that time it has an extra field: `_syncPending = true`.
 
@@ -94,7 +94,7 @@ Behaviors:
         "auths": [
           {
           "authId": "61bd5438-545b-4383-af21-f0434759bfa8"
-          "authType": "KERIKA",
+          "authType": "EMAIL",
           "email": "nirmalbaldaniya@gmail.com",
           "id": "61bd5438-545b-4383-af21-f0434759bfa8",
           }
@@ -155,3 +155,9 @@ Behaviors:
   - When `localWrite` option is `true`, deletes documents from state.
 
 - On `FIRESTORE_REDUX_DELETE_DOCS_FAILED`, resets documents to their previous value.
+
+---
+
+## Global Translation
+
+See [global-translation/state.md](./global-translation/state.md).
