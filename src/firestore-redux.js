@@ -26,6 +26,9 @@ class FirestoreRedux {
 
     // Default configuration for wait till read succeed query.
     this._readPollingConfig = { timeout: 30000, maxAttempts: 20 };
+
+    // Default configuration for reauthorize polling.
+    this._reauthorizePollingConfig = { timeout: 10000, maxAttempts: 1 };
   }
 
   /**
@@ -33,15 +36,26 @@ class FirestoreRedux {
    * @param {Object} store Redux Store.
    * @param {Object} firebaseApp Firebase app. It's optional.
    * @param {Object} readPollingConfig. Query polling config.
+   * @param {Function} reauthorize Called when a query/getDocById fails with `permission-denied` while
+   *   no user is currently authenticated (e.g. session expired). Must return a Promise that resolves
+   *   once the app has re-authenticated the user; the failed request is then retried automatically.
+   *   Optional - when not provided, `permission-denied` failures are not retried.
+   * @param {Object} reauthorizePollingConfig. Retry config for the request retried after `reauthorize`
+   *   resolves. Default is `{ timeout: 10000, maxAttempts: 1 }`.
    */
-  init({ store, firebaseApp, readPollingConfig }) {
+  init({ store, firebaseApp, readPollingConfig, reauthorize = () => {}, reauthorizePollingConfig = {} }) {
     if (!store) {
       throw "firestore-redux : redux store is not provided.";
     }
     this.store = store;
     store.addReducers({ firestore: firestoreReducer });
-    this.db = initializeFirestore(firebaseApp, {});
+    this.db = initializeFirestore(firebaseApp, {
+      experimentalAutoDetectLongPolling: true,
+      experimentalLongPollingOptions: { timeoutSeconds: 25 },
+    });
     this.readPollingConfig = merge(this._readPollingConfig, readPollingConfig);
+    this.reauthorizePollingConfig = merge(this._reauthorizePollingConfig, reauthorizePollingConfig);
+    this.reauthorize = reauthorize;
   }
 
   /**
@@ -63,7 +77,7 @@ class FirestoreRedux {
     }
 
     const id = (criteria && criteria.id) || selectors.getQueryId({collection, criteria});
-    const instance = new Query(this.store, this.db, this.readPollingConfig);
+    const instance = new Query(this.store, this.db, this.readPollingConfig, this.reauthorizePollingConfig, this.reauthorize);
     this._queries[id] = instance;
     instance.query(id, collection, criteria);
     this._queries[id] = instance;
@@ -96,7 +110,9 @@ class FirestoreRedux {
     const instance = new GetDocById(
       this.store,
       this.db,
-      this.readPollingConfig
+      this.readPollingConfig,
+      this.reauthorizePollingConfig,
+      this.reauthorize
     );
     this._queries[id] = instance;
     instance.getDoc(id, collectionPath, documentId, options);

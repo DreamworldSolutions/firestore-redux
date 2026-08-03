@@ -15,6 +15,13 @@ firestoreRedux.init(store, firebaseApp);
 - `store (Object)` Redux Store. It is mandatory.
 - `firebaseApp (Object)` Firebase app. It is optional.
 - `readPollingConfig` Configurations for waiting query. This is ignored when `waitTillSucceed` query criteria is not `true`. Default is `{ timeout: 30000, maxAttempts: 20 }`.
+- `reauthorize (Function)` Optional. Called when a `query`/`getDocById` request fails with a Firestore
+  `permission-denied` error while no user is currently authenticated (e.g. the session expired). Must
+  return a Promise that resolves once the app has re-authenticated the user; the failed request is then
+  retried automatically. When not provided, `permission-denied` failures while unauthenticated are not
+  retried and fail as before.
+- `reauthorizePollingConfig (Object)` Optional. Retry config for the request retried after `reauthorize`
+  resolves. Default is `{ timeout: 10000, maxAttempts: 1 }`.
 
 ##### returns
 

@@ -10,15 +10,18 @@ import queryActionDispatcher, { actionPayload as querytActionPayload} from "./qu
 import snapshotActionDispatcher from "./snapshot-action-dispatcher.js";
 import isEmpty from "lodash-es/isEmpty.js";
 import find from 'lodash-es/find.js';
+import { getAuth } from 'firebase/auth';
 
 class GetDocById {
-  constructor(store, db, pollingConfig) {
+  constructor(store, db, pollingConfig, reauthorizePollingConfig, reauthorize) {
     /**
      * A redux store which holds the whole state tree of firestore.
      */
     this.store = store;
     this.db = db;
     this.pollingConfig = pollingConfig;
+    this.reauthorizePollingConfig = reauthorizePollingConfig;
+    this.reauthorize = reauthorize;
     // `unsubscribe` method returned by firestore onSnapshot.
     this._unsubscribe = undefined;
   }
@@ -42,7 +45,7 @@ class GetDocById {
     this._options = options;
     const pathSegments = collectionPath.split("/");
     const collection = pathSegments[pathSegments.length - 1];
-    if (!this._waiting) {
+    if (!this._waiting && !this._waitingReauthorizedRetry) {
       queryActionDispatcher(
         {
           id,
@@ -228,10 +231,19 @@ class GetDocById {
   __onRequestFailed(error) {
     this.__unsubscribe();
 
+    if (error.code === 'permission-denied') {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser && !this._waitingReauthorizedRetry) {
+        this.__retryOnReauthorized();
+        return;
+      }
+    }
+
     if (!this._options.waitTillSucceed) {
       this.__dispatchQueryFailed(error);
       this._reject(
-        `${error} for document: ${this._documentId} in collection path: ${this._collectionPath}`
+        `${error?.message || error?.code || JSON.stringify(error)} for document: ${this._documentId} in collection path: ${this._collectionPath}`
       );
       return;
     }
@@ -240,7 +252,7 @@ class GetDocById {
       this.__retryTillSucceed();
     } else {
       this._retryReject(
-        `${error} after retry for document: ${this._documentId} in collection path: ${this._collectionPath}`
+        `${error?.message || error?.code || JSON.stringify(error)} after retry for document: ${this._documentId} in collection path: ${this._collectionPath}`
       );
     }
   }
@@ -270,6 +282,40 @@ class GetDocById {
   }
 
   /**
+   * Retries the document retrieval operation after reauthorizing the user.
+   * Called when the initial document retrieval fails due to a `permission-denied` error while no user
+   * is currently authenticated (e.g. session expired). Waits for the app's `reauthorize` callback to
+   * resolve, then retries `getDoc` with the original arguments.
+   * @private
+   */
+  async __retryOnReauthorized() {
+    this._waitingReauthorizedRetry = true;
+    try {
+      await this.reauthorize();
+      await reAttempt(
+        () =>
+          this.getDoc(
+            this.id,
+            this._collectionPath,
+            this._documentId,
+            this._options
+          ),
+        {
+          timeout: this.reauthorizePollingConfig.timeout,
+          maxAttempts: this.reauthorizePollingConfig.maxAttempts,
+          factor: 2,
+          maxDelay: 1000,
+        }
+      );
+    } catch (error) {
+      this.__dispatchQueryFailed(error);
+      this._reject(
+        `${error?.message || error?.code || JSON.stringify(error)} for document: ${this._documentId} in collection path: ${this._collectionPath}`
+      );
+    }
+  }
+
+  /**
    * Retries till document found.
    * @private
    */
@@ -294,7 +340,7 @@ class GetDocById {
     } catch (error) {
       this.__dispatchQueryFailed(error);
       this._reject(
-        `${error} for document: ${this._documentId} in collection path: ${this._collectionPath}`
+        `${error?.message || error?.code || JSON.stringify(error)} for document: ${this._documentId} in collection path: ${this._collectionPath}`
       );
     }
   }
