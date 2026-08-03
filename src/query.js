@@ -218,10 +218,7 @@ class Query {
       if (!this._waiting) {
         this.__retryTillSucceed();
       } else {
-        this._retryReject({
-          code: "NOT_FOUND",
-          message: `Documents not found after retry in collection: ${this._collection}`,
-        });
+        this._retryResolve([]);
       }
     } catch (error) {
       this.__onQueryFailed(error);
@@ -291,10 +288,7 @@ class Query {
         if (!this._waiting) {
           this.__retryTillSucceed();
         } else {
-          this._retryReject({
-            code: "NOT_FOUND",
-            message: `Documents not found after retry in collection: ${this._collection}`,
-          });
+          this._retryResolve([]);
         }
       },
       (error) => {
@@ -487,8 +481,8 @@ class Query {
         }
       );
     } catch (error) {
-      this.__dispatchQueryFailed(error);
-      this._reject(`${error?.message || error?.code || JSON.stringify(error)} for collection: ${this._collection}, criteria: ${JSON.stringify(this._criteria)}`);
+      console.warn(`Documents not found after retry for collection: ${this._collection}, criteria: ${JSON.stringify(this._criteria)}`);
+      this._retryResolve([]);
     }
   }
 

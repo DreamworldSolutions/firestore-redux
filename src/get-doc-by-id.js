@@ -157,10 +157,11 @@ class GetDocById {
       if (!this._waiting) {
         this.__retryTillSucceed();
       } else {
-        this._retryReject({
-          code: "NOT_FOUND",
-          message: `Document: ${this._documentId} not found after retry in collection path: ${this._collectionPath}`,
-        });
+        this._retryResolve(undefined);
+      }
+
+      if (this._waitingReauthorizedRetry) {
+        this._retryResolve(undefined);
       }
     } catch (error) {
       this.__onRequestFailed(error);
@@ -212,10 +213,11 @@ class GetDocById {
         if (!this._waiting) {
           this.__retryTillSucceed();
         } else {
-          this._retryReject({
-            code: "NOT_FOUND",
-            message: `Document: ${this._documentId} not found after retry in collection path: ${this._collectionPath}`,
-          });
+          this._retryResolve(undefined);
+        }
+
+        if (this._waitingReauthorizedRetry) {
+          this._retryResolve(undefined);
         }
       },
       (error) => {
@@ -238,6 +240,10 @@ class GetDocById {
         this.__retryOnReauthorized();
         return;
       }
+    }
+
+    if (this._waitingReauthorizedRetry) {
+      this._retryResolve(undefined);
     }
 
     if (!this._options.waitTillSucceed) {
@@ -338,10 +344,8 @@ class GetDocById {
         }
       );
     } catch (error) {
-      this.__dispatchQueryFailed(error);
-      this._reject(
-        `${error?.message || error?.code || JSON.stringify(error)} for document: ${this._documentId} in collection path: ${this._collectionPath}`
-      );
+      console.warn(`Document: ${this._documentId} not found after retry in collection path: ${this._collectionPath}`);
+      this._retryResolve(undefined);
     }
   }
 
