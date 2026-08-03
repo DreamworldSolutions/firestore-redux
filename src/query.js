@@ -8,6 +8,7 @@ import find from 'lodash-es/find.js';
 import { retry as reAttempt } from "@lifeomic/attempt";
 import queryActionDispatcher, { actionPayload as querytActionPayload} from "./query-action-dispatcher.js";
 import snapshotActionDispatcher from "./snapshot-action-dispatcher.js";
+import { getAuth } from 'firebase/auth';
 
 import {
   collectionGroup,
@@ -23,13 +24,15 @@ import {
   limit as fsLimit,
 } from "firebase/firestore";
 class Query {
-  constructor(store, db, pollingConfig) {
+  constructor(store, db, pollingConfig, reauthorizePollingConfig, reauthorize) {
     /**
      * A redux store which holds the whole state tree of firestore.
      */
     this.store = store;
     this.db = db;
     this.pollingConfig = pollingConfig;
+    this.reauthorizePollingConfig = reauthorizePollingConfig;
+    this.reauthorize = reauthorize;
     // `unsubscribe` method returned by firestore onSnapshot.
     this._unsubscribe = undefined;
   }
@@ -393,9 +396,18 @@ class Query {
   __onQueryFailed(error) {
     this.__unsubscribe();
 
+    if (error.code === 'permission-denied') {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser && !this._waitingReauthorizedRetry) {
+        this.__retryOnReauthorized();
+        return;
+      }
+    }
+
     if (!this._criteria.waitTillSucceed) {
       this.__dispatchQueryFailed(error);
-      this._reject(`${error} for collection: ${this._collection}, criteria: ${JSON.stringify(this._criteria)}`);
+      this._reject(`${error?.message || error?.code || JSON.stringify(error)} for collection: ${this._collection}, criteria: ${JSON.stringify(this._criteria)}`);
       return;
     }
 
@@ -403,7 +415,7 @@ class Query {
       this.__retryTillSucceed();
     } else {
       this._retryReject(
-        `${error} after retry for collection: ${this._collection}`
+        `${error?.message || error?.code || JSON.stringify(error)} after retry for collection: ${this._collection}`
       );
     }
   }
@@ -433,6 +445,32 @@ class Query {
   }
 
   /**
+   * Retries the query after the user has been reauthorized.
+   * Called when the query fails due to a `permission-denied` error while no user is currently
+   * authenticated (e.g. session expired). Waits for the app's `reauthorize` callback to resolve, then
+   * retries the query with its original criteria.
+   * @private
+   */
+  async __retryOnReauthorized() {
+    this._waitingReauthorizedRetry = true;
+    try {
+      await this.reauthorize();
+      await reAttempt(
+        () => this.query(this.id, this._collection, this._criteria),
+        {
+          timeout: this.reauthorizePollingConfig.timeout,
+          maxAttempts: this.reauthorizePollingConfig.maxAttempts,
+          factor: 2,
+          maxDelay: 1000,
+        }
+      );
+    } catch (error) {
+      this.__dispatchQueryFailed(error);
+      this._reject(`${error?.message || error?.code || JSON.stringify(error)} for collection: ${this._collection}, criteria: ${JSON.stringify(this._criteria)}`);
+    }
+  }
+
+  /**
    * Retries query till result found.
    * @private
    */
@@ -450,7 +488,7 @@ class Query {
       );
     } catch (error) {
       this.__dispatchQueryFailed(error);
-      this._reject(`${error} for collection: ${this._collection}, criteria: ${JSON.stringify(this._criteria)}`);
+      this._reject(`${error?.message || error?.code || JSON.stringify(error)} for collection: ${this._collection}, criteria: ${JSON.stringify(this._criteria)}`);
     }
   }
 
