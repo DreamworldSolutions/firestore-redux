@@ -1,0 +1,86 @@
+openapi: 3.0.3
+info:
+  title: Translation — Translator (URL form)
+  version: "1.0"
+  description: >
+    Contract a server API must implement to be configured as a Translator via
+    `firestoreRedux.translation.setTranslator(url)` (see ./user-reference-guide.md#firestorereduxtranslationsettranslator).
+    GET-only, no request body — a POST API can't be configured this way; use the function form of
+    `translation.setTranslator` instead (see ./translator-function-spec.md) and make the call yourself.
+paths:
+  /translate:
+    get:
+      summary: Translate a batch of items into one target language.
+      description: >
+        The library calls this with `credentials: 'include'` — the app's existing cookie-based
+        session travels automatically. Path shown here is illustrative; the actual path is whatever
+        URL is passed to `translation.setTranslator`.
+      parameters:
+        - name: targetLanguage
+          in: query
+          required: true
+          schema:
+            type: string
+          example: hi
+        - name: items
+          in: query
+          required: true
+          description: >
+            JSON-encoded object, keyed by an opaque id the library generates (see
+            architecture.md#fidelity-chunking-and-wire-addressing for how that id is built).
+          schema:
+            type: string
+          example: '{"a1b2":{"text":"Design the home page","contentType":"PLAIN"},"a1b3":{"text":"<p>New layout</p>","contentType":"HTML"}}'
+      responses:
+        "200":
+          description: Translation results, same keys as the request's `items`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranslateResponse"
+components:
+  schemas:
+    TranslateItem:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          description: Source text for this item.
+        contentType:
+          type: string
+          enum: [PLAIN, MARKDOWN, HTML]
+          description: >
+            The schema's declared content type for this field, or absent when the integrator's schema
+            left it undeclared — a capable Translator can auto-detect plain/markdown/HTML/MDX in that
+            case; a simpler one can just treat it as plain text.
+        hints:
+          type: array
+          items:
+            type: string
+          description: >
+            e.g. ["user_name"] — signals this item should be transliterated (rendered in the target
+            script) rather than translated for meaning. Training the Translator to transliterate
+            correctly for a given hint is the Translator's own responsibility.
+    TranslateResponseItem:
+      type: object
+      required: [text, success]
+      properties:
+        text:
+          type: string
+          description: Translated text. Meaningful only when success is true.
+        success:
+          type: boolean
+        error:
+          type: string
+          description: Present when success is false.
+    TranslateResponse:
+      type: object
+      required: [targetLanguage, items]
+      properties:
+        targetLanguage:
+          type: string
+        items:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/TranslateResponseItem"

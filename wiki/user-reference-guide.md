@@ -319,6 +319,6 @@ const error = firestoreRedux.selectors.queriesByRequester({state, requesterId});
 
 - `(Array)` e.g. `[$query1, $query2, ...]`
 
-## Global Translation
+## Translation
 
-See [global-translation/user-reference-guide.md](./global-translation/user-reference-guide.md).
+See [translation/user-reference-guide.md](./translation/user-reference-guide.md).

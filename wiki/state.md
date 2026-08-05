@@ -158,6 +158,6 @@ Behaviors:
 
 ---
 
-## Global Translation
+## Translation
 
-See [global-translation/state.md](./global-translation/state.md).
+See [translation/state.md](./translation/state.md).
