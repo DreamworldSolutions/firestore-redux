@@ -190,9 +190,13 @@ only at the moment the activation starts.
    not only what's currently rendered.
 3. **On existing-document update — retranslate only what changed.** Each activation currently matching
    this document diffs the incoming update against the previous version:
-   - A translatable field whose raw value changed is re-sent for translation; its previous translated
-     value and any `failedFields` entry for it are cleared until the new result arrives.
-   - A field that changed but isn't translatable is copied straight into the clone — no translate call.
+   - A translatable field whose raw value changed is **debounced per document** — a short, fixed quiet
+     window that resets on every further change to that document — before being re-sent for translation;
+     see [architecture.md#fidelity-chunking-and-wire-addressing](./architecture.md#fidelity-chunking-and-wire-addressing).
+     Its previous translated value and any `failedFields` entry for it are cleared once the window
+     elapses and the translate call actually starts, not the instant the raw value changes.
+   - A field that changed but isn't translatable is copied straight into the clone immediately — no
+     translate call, so no debounce either.
    - A field that didn't change is left exactly as it was in the clone, including its existing
      translation.
 4. **On `translation.update` (filter-function change)** — documents still matching the new

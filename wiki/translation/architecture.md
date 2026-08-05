@@ -34,7 +34,19 @@ integrator never touches any of this directly:
   source (inline tags, mention chips, links). A mismatch — or a translate-call failure — is treated as
   a failure for that item only; the original is kept, and it's recorded in
   [`translation.failedFields`](./selectors-reference.md#firestorereduxselectorstranslationfailedfields).
-- **Chunking and concurrency.** Batches split (newest-relevant-first), capped by item count and
+- **Debouncing.** A document's translatable fields aren't re-sent the instant a raw value changes.
+  Each document has its own short, fixed quiet window (a few hundred milliseconds); every further change
+  to that document resets its window. Only once the window elapses without another change does that
+  document's changed fields join the next batch — see
+  [state.md#behaviors](./state.md#behaviors) item 3. This is per document, not global or per-activation:
+  a burst of edits across many different documents doesn't serialize behind one shared timer, and a
+  document that's actively being edited (e.g. live-typing sync) triggers one translate call once editing
+  pauses, not one per keystroke-level update. `status` for a debouncing document stays whatever it was
+  before the change — it doesn't flip to `IN_PROGRESS` until the window elapses and the translate call
+  actually starts.
+- **Chunking and concurrency.** Once a document's changes clear debounce (or, for `translation.start`'s
+  initial scan and `translation.setLanguage`, immediately — neither of those is a rapid-fire update
+  stream), its translatable fields join batches split newest-relevant-first, capped by item count and
   character count per request, with a concurrency cap — keeps visible content resolving first without
   overwhelming the Translator.
 - **Wire addressing.** Each item sent to the Translator carries a flat, opaque, echoed-back id — see
