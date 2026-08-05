@@ -32,19 +32,12 @@ around.
 Getting this running takes three calls. The first two are required; the third is where you actually
 say what to translate.
 
-**1. Configure a [Translator](./user-reference-guide.md#firestorereduxtranslationsettranslator).** Either a JS
-function or a server API URL — whatever your app's own translate endpoint looks like. This library has
-no default; it always calls out to yours.
+**1. Configure a [Translator](./user-reference-guide.md#firestorereduxtranslationsettranslator).** Either a server
+API URL (`GET` or `POST`) or a JS function — whatever your app's own translate endpoint looks like. This
+library has no default; it always calls out to yours.
 
 ```js
-firestoreRedux.translation.setTranslator(({ targetLanguage, items }) =>
-  fetch('/translate', {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ targetLanguage, items }),
-  }).then((res) => res.json())
-);
+firestoreRedux.translation.setTranslator({ url: '/translate', method: 'POST' });
 ```
 
 **2. [Set a language](./user-reference-guide.md#firestorereduxtranslationsetlanguage).** One value,

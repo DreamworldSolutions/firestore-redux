@@ -24,40 +24,39 @@ transliterates instead of translating that item — training the Translator to t
 for a given hint is the Translator's own responsibility, not something this library configures); the
 same keys back, each `{ text, success, error? }`.
 
-The URL form only supports a `GET` request — no request body. See
-[translate-api.openapi.yml](./translate-api.openapi.yml) for its exact contract. A **POST** API
-(needed to send `items` in a body) can't be configured as a plain URL; use the **function** form
-instead — see [translator-function-spec.md](./translator-function-spec.md) for its full contract —
-and make the `POST` call yourself.
+The URL form covers both `GET` and `POST`: a plain string, or `{ url }` with no `method`, defaults to
+`GET` (query params); `{ url, method: 'POST' }` is `POST` (`{ targetLanguage, items }` sent as a JSON
+body). Both are called with `credentials: 'include'` — the app's existing cookie-based session travels
+automatically. See
+[translate-api.openapi.yml](./translate-api.openapi.yml) for the exact contract of each — **the URL form
+only works if your server API's request and response match that contract exactly** (same param/field
+names, same request shape for the method you pick, same response shape); there's no room to adapt or
+rename anything in this form. If your API's shape differs at all — different field names, extra
+required params, a different response envelope — or you need something the contract doesn't cover at
+all (custom headers, a non-JSON body, auth beyond `credentials: 'include'`), use the **function** form
+instead — see [translator-function-spec.md](./translator-function-spec.md) for its full contract; you
+make the call (and choose the method, and adapt the shape) yourself.
 
 ```js
-// URL — GET only, no body, per translate-api.openapi.yml. The library calls it with
-// credentials: 'include' (the app's existing cookie-based session travels automatically) and expects
-// { targetLanguage, items } back.
+// URL (GET) — query params, per translate-api.openapi.yml.
 firestoreRedux.translation.setTranslator('https://api.example.com/translate');
 
-// Function — required for a POST API. Same request/response contract, called in-process instead of
-// over HTTP; you make the call (and choose the method) yourself.
+// URL (POST) — { targetLanguage, items } sent as a JSON body instead, same credentials: 'include'
+// behavior, per translate-api.openapi.yml.
+firestoreRedux.translation.setTranslator({ url: 'https://api.example.com/translate', method: 'POST' });
+
+// Function — for anything the URL form doesn't cover (custom headers, non-JSON body, other auth).
+// Same request/response contract, called in-process instead of over HTTP.
 firestoreRedux.translation.setTranslator(async ({ targetLanguage, items }) => {
   const translatedItems = await callMyTranslateService(targetLanguage, items); // { [id]: { text, success, error? } }
   return { targetLanguage, items: translatedItems };
 });
-
-// Function via fetch — a POST endpoint, called in-process, with credentials: 'include' so the app's
-// existing cookie-based session travels automatically.
-firestoreRedux.translation.setTranslator(({ targetLanguage, items }) =>
-  fetch('/translate', {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ targetLanguage, items }),
-  }).then((res) => res.json())
-);
 ```
 
 ##### Arguments
 
-- `translator (String | Function)` A server API URL, or a function
+- `translator (String | Object | Function)` A server API URL, defaulting to `GET`; or `{ url, method? }`
+  where `method` is `'GET'` (default, same as the plain-string form) or `'POST'`; or a function
   `({ targetLanguage, items }) => Promise<{ targetLanguage, items }>`. Mandatory before
   [starting translation](#firestorereduxtranslationstart).
 

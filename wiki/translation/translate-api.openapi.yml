@@ -3,18 +3,22 @@ info:
   title: Translation — Translator (URL form)
   version: "1.0"
   description: >
-    Contract a server API must implement to be configured as a Translator via
-    `firestoreRedux.translation.setTranslator(url)` (see ./user-reference-guide.md#firestorereduxtranslationsettranslator).
-    GET-only, no request body — a POST API can't be configured this way; use the function form of
-    `translation.setTranslator` instead (see ./translator-function-spec.md) and make the call yourself.
+    Contract a server API must implement, EXACTLY (same param/field names, same request shape for the
+    method used, same response shape — no adaptation happens on the way in or out), to be configured as
+    a Translator via `firestoreRedux.translation.setTranslator(url)` or `setTranslator({ url })` (GET,
+    the default) or `setTranslator({ url, method: 'POST' })` (POST) — see
+    ./user-reference-guide.md#firestorereduxtranslationsettranslator. Both forms are called with
+    `credentials: 'include'`, so the app's existing cookie-based session travels automatically. If your
+    API's shape differs at all, or you need something this contract doesn't cover (custom headers, a
+    non-JSON body, auth beyond `credentials: 'include'`), use the function form of
+    `translation.setTranslator` instead (see ./translator-function-spec.md) and adapt the shape yourself.
 paths:
   /translate:
     get:
-      summary: Translate a batch of items into one target language.
+      summary: Translate a batch of items into one target language (GET form).
       description: >
-        The library calls this with `credentials: 'include'` — the app's existing cookie-based
-        session travels automatically. Path shown here is illustrative; the actual path is whatever
-        URL is passed to `translation.setTranslator`.
+        Used when `setTranslator` is configured with a plain URL string. Path shown here is
+        illustrative; the actual path is whatever URL is passed to `translation.setTranslator`.
       parameters:
         - name: targetLanguage
           in: query
@@ -38,8 +42,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TranslateResponse"
+    post:
+      summary: Translate a batch of items into one target language (POST form).
+      description: >
+        Used when `setTranslator` is configured with `{ url, method: 'POST' }`. Path shown here is
+        illustrative; the actual path is whatever URL is passed to `translation.setTranslator`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TranslateRequest"
+      responses:
+        "200":
+          description: Translation results, same keys as the request's `items`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranslateResponse"
 components:
   schemas:
+    TranslateRequest:
+      type: object
+      required: [targetLanguage, items]
+      properties:
+        targetLanguage:
+          type: string
+        items:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/TranslateItem"
     TranslateItem:
       type: object
       required: [text]

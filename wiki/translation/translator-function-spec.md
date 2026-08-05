@@ -1,7 +1,7 @@
 # Translation — Translator Function Specification
 
 This is the reference for the function form of `translation.setTranslator` — the contract your JS function must
-implement. For the URL/`GET` form's contract see
+implement. For the URL form's contract (both `GET` and `POST`) see
 [translate-api.openapi.yml](./translate-api.openapi.yml). See
 [user-reference-guide.md](./user-reference-guide.md#firestorereduxtranslationsettranslator) to configure it.
 
@@ -51,9 +51,13 @@ interface TranslateResponseItem {
   an `error` for the items that failed, alongside `success: true` results for the ones that succeeded,
   in the same response. A field reported as failed keeps its original, source-language value in state —
   never `null` — see [state.md#docstatus](./state.md#docstatus).
-- **This function is called in-process**, not over HTTP — you make whatever network call you need
-  (including `POST`, unlike the [URL form](./translate-api.openapi.yml), which is `GET`-only) and
-  resolve the promise with the result.
+- **This function is called in-process**, not over HTTP — you make whatever network call you need and
+  resolve the promise with the result. Reach for this instead of the
+  [URL form](./translate-api.openapi.yml) — which already covers both `GET` (plain URL string) and
+  `POST` (`{ url, method: 'POST' }`) — whenever your server API's request/response shape doesn't match
+  that contract exactly (the URL form can't rename fields, add params, or unwrap a different response
+  envelope), or you need something the contract doesn't cover at all: custom headers, a non-JSON body,
+  or auth beyond `credentials: 'include'`.
 
 ## Example
 
