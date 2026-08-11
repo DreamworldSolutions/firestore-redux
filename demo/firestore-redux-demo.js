@@ -3,6 +3,10 @@ import { connect } from "@dreamworld/pwa-helpers/connect-mixin";
 import cloneDeep from "lodash-es/cloneDeep";
 import { store } from "./store";
 import firestoreRedux from "../src/firestore-redux";
+import * as translationActions from "../src/translation/redux/actions.js";
+import * as translationSelectors from "../src/translation/redux/selectors.js";
+import { translatableFields } from "../src/translation/schema.js";
+import { Status } from "../src/translation/enums.js";
 import { initializeApp } from "firebase/app";
 import "@dreamworld/dw-input/dw-textarea";
 import "@dreamworld/dw-input/dw-input";
@@ -111,6 +115,24 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
       dw-radio-button {
         margin-left: 8px;
       }
+
+      .translation-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .translation-actions dw-button {
+        align-self: auto;
+        margin: 8px 8px 0 0;
+      }
+
+      pre.output {
+        background-color: #eceff1;
+        padding: 8px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
     `,
   ];
 
@@ -134,6 +156,16 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
      * Query detail provided by the user. e.g {id, requesterId, collection, where, orderBy, startAt, startAfter, endAt, endBefore, limit, once}
      */
     _query: { type: Object },
+
+    /**
+     * Whole `/translations` branch of the redux state, mirrored so the demo re-renders on change.
+     */
+    _translationState: { type: Object },
+
+    /**
+     * Human readable result of the last translation scenario that was run.
+     */
+    _translationOutput: { type: String },
   };
 
   constructor() {
@@ -153,6 +185,13 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     this._deleteCollection = "cards";
     this._deleteLocal = true;
     this._deleteRemote = true;
+
+    this._translationOutput = "Run a scenario to see its result here (and in the console).";
+    this._translationSchemaString = `{
+  "posts": {
+    "*": { "title": { "contentType": "PLAIN" }, "body": { "contentType": "HTML" } }
+  }
+}`;
   }
 
   firstUpdated(changedProps) {
@@ -170,8 +209,58 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     }
 
     return html`
-      ${this._readByQueryTemplate} ${this._readByDocTemplate}
-      ${this._cancelQueryTemplate} ${this._saveDeleteTemplate}
+      ${this._translationTemplate} ${this._readByQueryTemplate}
+      ${this._readByDocTemplate} ${this._cancelQueryTemplate}
+      ${this._saveDeleteTemplate}
+    `;
+  }
+
+  get _translationTemplate() {
+    return html`
+      <div class="request-query_container card">
+        <h6 class="headline6">
+          Translation &mdash; <code>/translations</code> state shape &amp;
+          <code>setSchema</code>
+        </h6>
+        <div class="translation-actions">
+          <dw-button raised @click=${this.__runTranslationScenario1}
+            >1. Shared language</dw-button
+          >
+          <dw-button raised @click=${this.__runTranslationScenario2}
+            >2. Own "status" field</dw-button
+          >
+          <dw-button raised @click=${this.__runTranslationScenario3}
+            >3. '*' + doc override</dw-button
+          >
+          <dw-button raised @click=${this.__runTranslationScenario4}
+            >4. Default skips &amp; contentType</dw-button
+          >
+          <dw-button outlined @click=${this.__resetTranslationState}
+            >Reset</dw-button
+          >
+        </div>
+
+        <h6 class="headline6">Result</h6>
+        <pre class="output">${this._translationOutput}</pre>
+
+        <h6 class="headline6">
+          Set a schema by hand (<code>translation.setSchema</code>)
+        </h6>
+        <dw-textarea
+          .minHeight=${100}
+          .maxHeight=${240}
+          .value=${this._translationSchemaString}
+          @value-changed=${(e) => {
+            this._translationSchemaString = e.detail.value;
+          }}
+        ></dw-textarea>
+        <dw-button raised @click=${this.__setTranslationSchema}
+          >Set Schema</dw-button
+        >
+
+        <h6 class="headline6">Current <code>/translations</code> state</h6>
+        <pre class="output">${this.__stringify(this._translationState)}</pre>
+      </div>
     `;
   }
 
@@ -622,6 +711,288 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
   }
 
   /**
+   * Scenario 1: two activations covering different collections, both translating into the same
+   * language - there must be no per-activation language field anywhere in state.
+   */
+  __runTranslationScenario1() {
+    store.dispatch(translationActions._setLanguage("hi"));
+    store.dispatch(
+      translationActions._addActivation({
+        id: "posts-feed",
+        filterFunction: (doc, collection) => collection === "posts",
+      })
+    );
+    store.dispatch(
+      translationActions._addActivation({
+        id: "comments-feed",
+        filterFunction: (doc, collection) => collection === "comments",
+      })
+    );
+
+    const { language, activations } = store.getState().translations;
+    const ids = Object.keys(activations);
+    const carryingLanguage = ids.filter((id) => "language" in activations[id]);
+
+    this.__reportTranslationScenario(
+      "Scenario 1 - two activations, one shared language",
+      [
+        `translations.language = ${JSON.stringify(language)}`,
+        ...ids.map(
+          (id) => `activations.${id} keys = [${Object.keys(activations[id]).join(", ")}]`
+        ),
+        this.__check(language === "hi", `single top-level language is 'hi'`),
+        this.__check(ids.length === 2, `both activations are stored (${ids.length})`),
+        this.__check(
+          carryingLanguage.length === 0,
+          `no activation carries its own 'language' field`
+        ),
+      ],
+      { language, activations }
+    );
+  }
+
+  /**
+   * Scenario 2: a document whose own real field is named `status`. The clone must hold the
+   * document's value; the translation status lives in the separate `status` branch.
+   */
+  __runTranslationScenario2() {
+    const original = {
+      id: "post_123",
+      title: "Design home page",
+      status: "IN_PROGRESS",
+    };
+
+    store.dispatch(
+      translationActions._setTranslatedDoc("posts", "post_123", {
+        ...original,
+        title: "होम पेज डिज़ाइन करें",
+      })
+    );
+    store.dispatch(
+      translationActions._setDocStatus("posts", "post_123", {
+        status: Status.SUCCESS,
+        failedFields: [],
+      })
+    );
+
+    const { docs, status } = store.getState().translations;
+    const clone = docs.posts.post_123;
+    const docStatus = status.posts.post_123;
+
+    this.__reportTranslationScenario(
+      "Scenario 2 - a document field named 'status' never collides with translation metadata",
+      [
+        `docs.posts.post_123   = ${JSON.stringify(clone)}`,
+        `status.posts.post_123 = ${JSON.stringify(docStatus)}`,
+        this.__check(
+          clone.status === "IN_PROGRESS",
+          `the clone's 'status' holds the document's own value`
+        ),
+        this.__check(
+          docStatus.status === Status.SUCCESS,
+          `the translation status is 'SUCCESS', in its own branch`
+        ),
+        this.__check(
+          clone.failedFields === undefined,
+          `no translation metadata leaked into the clone`
+        ),
+      ],
+      { clone, docStatus }
+    );
+  }
+
+  /**
+   * Scenario 3: a `'*'` schema entry plus a specific-document override - only that document uses
+   * the override.
+   */
+  __runTranslationScenario3() {
+    firestoreRedux.translation.setSchema({
+      posts: {
+        "*": { title: { contentType: "PLAIN" } },
+        post_123: { title: { skip: true } },
+      },
+    });
+
+    const schema = translationSelectors.schema(store.getState());
+    const wildcard = translatableFields(
+      { id: "post_999", title: "Design home page" },
+      "posts",
+      schema
+    );
+    const overridden = translatableFields(
+      { id: "post_123", title: "Design home page" },
+      "posts",
+      schema
+    );
+
+    this.__reportTranslationScenario(
+      "Scenario 3 - '*' covers the collection, a document Id overrides it",
+      [
+        `post_999 (uses '*')      -> ${JSON.stringify(wildcard)}`,
+        `post_123 (own override)  -> ${JSON.stringify(overridden)}`,
+        this.__check(
+          wildcard.length === 1 && wildcard[0].contentType === "PLAIN",
+          `post_999's title is translatable, as PLAIN, from the '*' entry`
+        ),
+        this.__check(
+          overridden.length === 0,
+          `post_123's title is skipped by its own entry`
+        ),
+      ],
+      { wildcard, overridden }
+    );
+  }
+
+  /**
+   * Scenario 4: default skips (including an `IN_PROGRESS`-shaped value), `{ skip: false }` forcing
+   * a skipped field back in, and an undeclared `contentType` staying genuinely absent.
+   */
+  __runTranslationScenario4() {
+    const doc = {
+      id: "post_1",
+      title: "Design home page",
+      columnType: "IN_PROGRESS",
+      body: "<p>New layout for the customer portal</p>",
+      views: 42,
+      rank: "3.5",
+      dueDate: "2026-08-11",
+      archived: false,
+      note: null,
+      owner: { name: "Nirmal" },
+    };
+
+    firestoreRedux.translation.setSchema({});
+    const withoutSchema = translatableFields(
+      doc,
+      "posts",
+      translationSelectors.schema(store.getState())
+    );
+
+    firestoreRedux.translation.setSchema({
+      posts: {
+        "*": { columnType: { skip: false }, body: { contentType: "HTML" } },
+      },
+    });
+    const withSchema = translatableFields(
+      doc,
+      "posts",
+      translationSelectors.schema(store.getState())
+    );
+
+    const titleField = withSchema.find(({ path }) => path === "title");
+    const bodyField = withSchema.find(({ path }) => path === "body");
+
+    this.__reportTranslationScenario(
+      "Scenario 4 - automatic skips, skip:false, and an absent contentType",
+      [
+        `no schema   -> ${withoutSchema.map(({ path }) => path).join(", ")}`,
+        `with schema -> ${withSchema.map(({ path }) => path).join(", ")}`,
+        `every item's keys, no schema: ${withoutSchema
+          .map(({ path, ...rest }) => `${path}:[${Object.keys(rest).join(",")}]`)
+          .join("  ")}`,
+        this.__check(
+          !withoutSchema.some(({ path }) => path === "columnType"),
+          `'IN_PROGRESS' is skipped automatically with no schema entry`
+        ),
+        this.__check(
+          withSchema.some(({ path }) => path === "columnType"),
+          `{ skip: false } brings 'columnType' back in`
+        ),
+        this.__check(
+          withoutSchema.every((field) => !("contentType" in field)),
+          `no undeclared field carries a contentType key at all - not even 'PLAIN'`
+        ),
+        this.__check(
+          titleField && !("contentType" in titleField),
+          `'title' stays absent while a sibling declares one`
+        ),
+        this.__check(
+          bodyField && bodyField.contentType === "HTML",
+          `'body' carries its declared HTML contentType`
+        ),
+        this.__check(
+          ["views", "rank", "dueDate", "archived", "note", "id"].every(
+            (path) => !withoutSchema.some((field) => field.path === path)
+          ),
+          `number / numeric string / date / boolean / null / id are all left out`
+        ),
+      ],
+      { withoutSchema, withSchema }
+    );
+  }
+
+  __setTranslationSchema() {
+    if (!this.__isJSONString(this._translationSchemaString)) {
+      alert("Please enter a valid JSON schema.");
+      return;
+    }
+
+    try {
+      firestoreRedux.translation.setSchema(
+        JSON.parse(this._translationSchemaString)
+      );
+      this.__reportTranslationScenario("translation.setSchema", [
+        this.__check(true, "schema accepted and stored at /translations.schema"),
+      ]);
+    } catch (error) {
+      console.error(error);
+      this.__reportTranslationScenario("translation.setSchema", [
+        this.__check(false, `${error}`),
+      ]);
+    }
+  }
+
+  __resetTranslationState() {
+    firestoreRedux.translation.setSchema({});
+    store.dispatch(translationActions._setLanguage(undefined));
+    store.dispatch(translationActions._removeActivation("posts-feed"));
+    store.dispatch(translationActions._removeActivation("comments-feed"));
+    store.dispatch(
+      translationActions._removeDocTranslation("posts", "post_123")
+    );
+    this._translationOutput = "Reset. /translations is back to its initial shape.";
+  }
+
+  /**
+   * Prints a scenario's outcome to both the demo card and the console.
+   * @param {String} title Scenario title.
+   * @param {Array} lines Lines to show, in order.
+   * @param {Object} data Raw values, logged to the console for inspection.
+   */
+  __reportTranslationScenario(title, lines, data) {
+    this._translationOutput = [title, "", ...lines].join("\n");
+    console.group(`%c${title}`, "font-weight: bold");
+    lines.forEach((line) => console.log(line));
+    data && console.log(data);
+    console.groupEnd();
+  }
+
+  /**
+   * @param {Boolean} passed Whether the expectation held.
+   * @param {String} expectation What was expected.
+   * @returns {String} A single result line.
+   */
+  __check(passed, expectation) {
+    return `${passed ? "PASS" : "FAIL"}  ${expectation}`;
+  }
+
+  /**
+   * @param {Object} value Value to show.
+   * @returns {String} Pretty JSON, with functions shown by name since JSON drops them.
+   */
+  __stringify(value) {
+    if (value === undefined) {
+      return "";
+    }
+
+    return JSON.stringify(
+      value,
+      (key, val) => (typeof val === "function" ? "<filterFunction>" : val),
+      2
+    );
+  }
+
+  /**
    * @param {String} str String to be checked for valid Object string
    * @returns {Boolean}
    */
@@ -642,6 +1013,8 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     return this.__isJSONString(str) && Array.isArray(JSON.parse(str));
   }
 
-  stateChanged(state) {}
+  stateChanged(state) {
+    this._translationState = state.translations;
+  }
 }
 customElements.define("firestore-redux-demo", FirestoreReduxDemo);

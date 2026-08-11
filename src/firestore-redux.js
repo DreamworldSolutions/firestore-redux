@@ -1,6 +1,10 @@
 import * as _actions from "./redux/actions.js";
 import * as _selectors from "./redux/selectors.js";
 import firestoreReducer from "./redux/reducers.js";
+import * as _translationActions from "./translation/redux/actions.js";
+import * as _translationSelectors from "./translation/redux/selectors.js";
+import translationReducer from "./translation/redux/reducers.js";
+import Translation from "./translation/translation.js";
 import { initializeFirestore } from "firebase/firestore";
 import Query from "./query.js";
 import GetDocById from "./get-doc-by-id.js";
@@ -29,6 +33,12 @@ class FirestoreRedux {
 
     // Default configuration for reauthorize polling.
     this._reauthorizePollingConfig = { timeout: 10000, maxAttempts: 1 };
+
+    /**
+     * Translation capability. Translates document content at read time. See
+     * wiki/translation/README.md.
+     */
+    this.translation = new Translation(this);
   }
 
   /**
@@ -48,7 +58,7 @@ class FirestoreRedux {
       throw "firestore-redux : redux store is not provided.";
     }
     this.store = store;
-    store.addReducers({ firestore: firestoreReducer });
+    store.addReducers({ firestore: firestoreReducer, translations: translationReducer });
     this.db = initializeFirestore(firebaseApp, {
       experimentalAutoDetectLongPolling: true,
       experimentalLongPollingOptions: { timeoutSeconds: 25 },
@@ -234,8 +244,14 @@ class FirestoreRedux {
 }
 
 const firestoreRedux = new FirestoreRedux();
-firestoreRedux.selectors = _selectors;
-firestoreRedux.actions = _actions;
-export const actions = _actions;
-export const selectors = _selectors;
+
+// Translation's actions/selectors are namespaced under `translation` so they never shadow the
+// existing query/document ones. e.g. `firestoreRedux.selectors.translation.language(state)`.
+const _allActions = { ..._actions, translation: _translationActions };
+const _allSelectors = { ..._selectors, translation: _translationSelectors };
+
+firestoreRedux.selectors = _allSelectors;
+firestoreRedux.actions = _allActions;
+export const actions = _allActions;
+export const selectors = _allSelectors;
 export default firestoreRedux;

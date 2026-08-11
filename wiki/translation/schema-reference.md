@@ -85,6 +85,45 @@ these are skipped automatically:
 Any of these can be overridden per field via the schema above (`{ skip: false }` forces translation of
 a field the defaults would otherwise skip).
 
+### What `skip: false` Can and Can't Force
+
+`skip: false` overrides the **shape**-based skips above — a string that merely *looks* numeric,
+boolean, date/time-shaped, or enum-shaped. It can't make a non-string translatable: only `String`
+values are ever sent to the Translator, whatever the schema says. Numbers, booleans, `null`,
+`undefined`, `Date`s, and Firestore `Timestamp`s have no text to send, so they're left out
+unconditionally — that's also what guarantees a `null`/`undefined` can never reach your Translator as
+an item.
+
+Two more values are skipped unconditionally, for the same reason:
+
+- **Empty or whitespace-only strings** — nothing to translate.
+- **A document's own `id`** — identity, not content; translating it would break every lookup keyed by
+  it. (Only the root `id` field. A field named `id` nested inside an object, e.g. `author.id`, follows
+  the normal rules.)
+
+### Declaring a Rule on a Branch
+
+A field path doesn't have to name a leaf. `{ skip: true }` on an object or array path prunes
+everything beneath it in one declaration:
+
+```js
+firestoreRedux.translation.setSchema({
+  posts: {
+    '*': { attachments: { skip: true } }, // attachments[0].name, attachments[1].name, ... all skipped
+  },
+});
+```
+
+The reverse isn't true: `skip: false` on a branch doesn't force its children in — each field still
+decides for itself. And `contentType` only applies to the exact path it's declared on.
+
+### `'*'` and a Document Entry Don't Merge
+
+A document's own entry **replaces** the collection's `'*'` entry rather than merging into it —
+`'*'` covers every document in the collection *that has no more specific entry of its own*. So a
+document entry declaring one field's rule leaves that document with exactly that one rule; every other
+field of that document falls back to the automatic defaults, not to `'*'`.
+
 ## Field Paths
 
 Field paths address where in a document a rule applies:
