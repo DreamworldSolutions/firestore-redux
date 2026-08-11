@@ -1,6 +1,9 @@
 import * as actions from "./actions.js";
 import get from "lodash-es/get.js";
+import set from "lodash-es/set.js";
 import isEmpty from "lodash-es/isEmpty.js";
+import forEach from "lodash-es/forEach.js";
+import cloneDeep from "lodash-es/cloneDeep.js";
 import { ReduxUtils } from "@dreamworld/pwa-helpers/redux-utils.js";
 
 /**
@@ -41,6 +44,18 @@ const translationReducer = (state = INITIAL_STATE, action) => {
         `docs.${action.collection}.${action.docId}`,
         action.doc
       );
+
+    case actions.SET_TRANSLATED_FIELDS: {
+      const docPath = `docs.${action.collection}.${action.docId}`;
+      const clone = get(state, docPath);
+      if (!clone) {
+        return state;
+      }
+
+      const newClone = cloneDeep(clone);
+      forEach(action.fields, (value, fieldPath) => set(newClone, fieldPath, value));
+      return ReduxUtils.replace(state, docPath, newClone);
+    }
 
     case actions.SET_DOC_STATUS:
       return ReduxUtils.replace(

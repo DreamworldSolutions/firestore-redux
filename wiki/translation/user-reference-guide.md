@@ -64,6 +64,17 @@ firestoreRedux.translation.setTranslator(async ({ targetLanguage, items }) => {
 
 - Nothing.
 
+##### Errors
+
+- Throws immediately if the argument isn't one of the three accepted forms, or if `method` is
+  anything other than `'GET'`/`'POST'`.
+- A non-2xx response from either URL form fails that batch's items — each keeps its original value
+  and is recorded in
+  [`translation.failedFields`](./selectors-reference.md#firestorereduxselectorstranslationfailedfields),
+  exactly as a per-item `success: false` would. Other in-flight batches are unaffected.
+- The `GET` form appends its params to whatever the configured URL already carries, so a URL with an
+  existing query string keeps it.
+
 ## `firestoreRedux.translation.setLanguage`
 
 Sets the current target language — the other required integrator input, alongside
@@ -87,6 +98,9 @@ firestoreRedux.translation.setLanguage('hi');
 ##### returns
 
 - Nothing.
+
+Throws if `language` is missing, empty, or not a String. Calling it again with the value it already
+holds is a no-op — no re-translation pass is triggered for a language that didn't actually change.
 
 Calling this again with a different value re-translates every document currently covered by any active
 activation — see [state.md#behaviors](./state.md#behaviors) item 6. It does not need to be called

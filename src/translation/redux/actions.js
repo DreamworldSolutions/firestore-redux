@@ -3,6 +3,7 @@ export const SET_SCHEMA = "FIRESTORE_REDUX_TRANSLATION_SET_SCHEMA";
 export const ADD_ACTIVATION = "FIRESTORE_REDUX_TRANSLATION_ADD_ACTIVATION";
 export const REMOVE_ACTIVATION = "FIRESTORE_REDUX_TRANSLATION_REMOVE_ACTIVATION";
 export const SET_TRANSLATED_DOC = "FIRESTORE_REDUX_TRANSLATION_SET_TRANSLATED_DOC";
+export const SET_TRANSLATED_FIELDS = "FIRESTORE_REDUX_TRANSLATION_SET_TRANSLATED_FIELDS";
 export const SET_DOC_STATUS = "FIRESTORE_REDUX_TRANSLATION_SET_DOC_STATUS";
 export const REMOVE_DOC_TRANSLATION = "FIRESTORE_REDUX_TRANSLATION_REMOVE_DOC_TRANSLATION";
 
@@ -19,11 +20,11 @@ export const setSchema = (schema) => {
 };
 
 /**
- * Sets the single, app-wide target language every activation translates into.
+ * Sets the single, app-wide target language every activation translates into. Not per-activation -
+ * there is one value for the whole app.
  * @param {String} language Target language.
- * @private
  */
-export const _setLanguage = (language) => {
+export const setLanguage = (language) => {
   return {
     type: SET_LANGUAGE,
     language,
@@ -71,6 +72,23 @@ export const _setTranslatedDoc = (collection, docId, doc) => {
     collection,
     docId,
     doc,
+  };
+};
+
+/**
+ * Writes translated values into an existing clone, leaving every other field of it untouched.
+ * No-op when the document has no clone yet.
+ * @param {String} collection Collection / Subcollection ID.
+ * @param {String} docId Document Id.
+ * @param {Object} fields Map of field path to its translated value. e.g. `{ 'owner.name': 'निर्मल' }`
+ * @private
+ */
+export const _setTranslatedFields = (collection, docId, fields) => {
+  return {
+    type: SET_TRANSLATED_FIELDS,
+    collection,
+    docId,
+    fields,
   };
 };
 

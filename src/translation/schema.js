@@ -83,31 +83,46 @@ export const documentFieldSchema = (schema, collection, docId) => {
 };
 
 /**
- * Decides whether a value's own shape means it isn't content worth translating - what the defaults
- * skip when no schema declares anything for the field. Overridable per field with `{ skip: false }`.
+ * Explains why the defaults skip a value, for diagnostics - which rule fired, in words. Overridable
+ * per field with `{ skip: false }`.
  * See wiki/translation/schema-reference.md#automatic-default-skips-overridable.
  *
  * @param {String} value Field value. Always a String - non-strings never reach here.
  * @param {String} path Field path, dot/bracket notation.
- * @returns {Boolean} `true` when the defaults skip this field.
+ * @returns {String|undefined} The rule that skipped it, or `undefined` when nothing does.
  */
-export const autoSkipped = (value, path) => {
+export const skipReason = (value, path) => {
   if (IDENTITY_ROOT_FIELDS.includes(path)) {
-    return true;
+    return "identity field - a document ID is never content";
   }
 
   const text = value.trim();
-  if (NUMERIC.test(text) || BOOLEAN.test(text)) {
-    return true;
+  if (NUMERIC.test(text)) {
+    return "numeric-shaped";
+  }
+
+  if (BOOLEAN.test(text)) {
+    return "boolean-shaped";
   }
 
   if (ISO_DATE_TIME.test(text) || SLASHED_DATE.test(text) || TIME.test(text)) {
-    return true;
+    return "date/time-shaped";
   }
 
   // Enum-shaped: a single ALL_CAPS_WITH_UNDERSCORES token, e.g. `IN_PROGRESS`.
-  return text.length > 1 && /[A-Z]/.test(text) && ENUM_TOKEN.test(text);
+  if (text.length > 1 && /[A-Z]/.test(text) && ENUM_TOKEN.test(text)) {
+    return "enum-shaped (ALL_CAPS_WITH_UNDERSCORES)";
+  }
+
+  return undefined;
 };
+
+/**
+ * @param {String} value Field value. Always a String - non-strings never reach here.
+ * @param {String} path Field path, dot/bracket notation.
+ * @returns {Boolean} `true` when the defaults skip this field.
+ */
+export const autoSkipped = (value, path) => skipReason(value, path) !== undefined;
 
 /**
  * Walks a document and collects every field that should be sent for translation, in schema key

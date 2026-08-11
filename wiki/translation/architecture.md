@@ -59,6 +59,42 @@ integrator never touches any of this directly:
   being joined, the joined string always splits back apart the same way it was built — it can never be
   misread as a different collection, document, or field name.
 
+### Concrete Limits
+
+The values behind the four behaviors above, all exported from
+`src/translation/translation-pipeline.js`:
+
+| Constant | Value | What it bounds |
+| -------- | ----- | -------------- |
+| `DEBOUNCE_WINDOW` | `300`ms | A document's quiet window before its changed fields join a batch |
+| `MAX_ITEMS_PER_REQUEST` | `50` | Items in one translate call |
+| `MAX_CHARS_PER_REQUEST` | `20000` | Total `text` characters in one translate call |
+| `MAX_CONCURRENT_REQUESTS` | `3` | Translate calls in flight at once |
+
+A single item longer than `MAX_CHARS_PER_REQUEST` is still sent, alone in its own batch, rather than
+being dropped or jamming the queue behind it. Within a batch, items keep the order they were queued
+in; it's the *choice* of which items form the batch that is newest-first, not the order inside it.
+
+A document's fields can span several batches. Its `status` is written once — after the last of them
+comes back — never once per batch.
+
+### What Fidelity Actually Compares
+
+The tag multiset is built from these tokens, sorted so that a translator reordering tags to suit the
+target language's grammar passes, while adding, dropping, or re-pointing one fails:
+
+- **Every HTML tag**, by lowercased name, opening and closing counted separately.
+- **Addressing attributes on those tags** — `href`, `src`, and every `data-*` attribute. These
+  identify what a tag *points at*; a mention chip's `data-mention-id` re-pointed at a different user
+  is a fidelity failure even though the visible text is fine. Attributes that carry translatable
+  prose (`title`, `alt`) are deliberately not compared.
+- **For `MARKDOWN`** — additionally each link/image destination, inline code span, and fence.
+  Emphasis markers (`*`, `_`) are not counted; moving them is legitimate.
+
+`PLAIN` skips the check entirely. An **undeclared** content type is scanned as HTML only — a
+genuinely HTML source is the case worth catching, whereas Markdown link syntax appearing in ordinary
+prose would be a false alarm.
+
 ## Data Flow
 
 ```
