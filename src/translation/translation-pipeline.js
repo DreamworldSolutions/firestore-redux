@@ -173,7 +173,7 @@ export default class TranslationPipeline {
       return;
     }
 
-    const original = firestoreSelectors.doc(state, collection, docId);
+    const original = firestoreSelectors.originalDoc(state, collection, docId);
     if (original) {
       this._store.dispatch(actions._setTranslatedDoc(collection, docId, cloneDeep(original)));
     }

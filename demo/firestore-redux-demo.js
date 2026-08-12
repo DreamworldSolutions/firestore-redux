@@ -2,21 +2,8 @@ import { LitElement, html, css, unsafeCSS } from '@dreamworld/pwa-helpers/lit.js
 import { connect } from "@dreamworld/pwa-helpers/connect-mixin";
 import cloneDeep from "lodash-es/cloneDeep";
 import forEach from "lodash-es/forEach";
-import get from "lodash-es/get";
 import { store } from "./store";
 import firestoreRedux from "../src/firestore-redux";
-import * as translationActions from "../src/redux/translation/actions.js";
-import * as translationSelectors from "../src/redux/translation/selectors.js";
-import { translatableFields, documentFieldSchema, skipReason } from "../src/translation/schema.js";
-import { Status } from "../src/translation/enums.js";
-import { toWireId, fromWireId } from "../src/translation/wire-id.js";
-import { fidelityPreserved, tagSignature } from "../src/translation/fidelity.js";
-import {
-  DEBOUNCE_WINDOW,
-  MAX_ITEMS_PER_REQUEST,
-  MAX_CHARS_PER_REQUEST,
-  MAX_CONCURRENT_REQUESTS,
-} from "../src/translation/translation-pipeline.js";
 import { initializeApp } from "firebase/app";
 import "@dreamworld/dw-input/dw-textarea";
 import "@dreamworld/dw-input/dw-input";
@@ -126,22 +113,28 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
         margin-left: 8px;
       }
 
-      .translation-actions {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
+      .translation-table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-top: 16px;
+        font-size: 14px;
       }
 
-      .translation-actions dw-button {
-        align-self: auto;
-        margin: 8px 8px 0 0;
-      }
-
-      pre.output {
-        background-color: #eceff1;
+      .translation-table th,
+      .translation-table td {
+        border-bottom: 1px solid lightgray;
         padding: 8px;
-        white-space: pre-wrap;
-        word-break: break-word;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .hint {
+        color: gray;
+        font-style: italic;
+      }
+
+      .switch-container dw-button {
+        margin-right: 8px;
       }
     `,
   ];
@@ -168,40 +161,14 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     _query: { type: Object },
 
     /**
-     * Whole `/translations` branch of the redux state, mirrored so the demo re-renders on change.
+     * `true` while the translation activation is running.
      */
-    _translationState: { type: Object },
+    _translating: { type: Boolean },
 
     /**
-     * Human readable result of the last translation scenario that was run.
+     * Rows shown in the translation table. e.g. [{ docId, original, translated, status }]
      */
-    _translationOutput: { type: String },
-
-    /**
-     * Human readable result of the last Translator-pipeline scenario that was run.
-     */
-    _pipelineOutput: { type: String },
-
-    /**
-     * Human readable result of the last setTranslator / setLanguage scenario that was run.
-     */
-    _translatorOutput: { type: String },
-
-    /**
-     * Human readable result of the last activation-lifecycle scenario that was run.
-     */
-    _activationOutput: { type: String },
-
-    /**
-     * Human readable result of the last document-change scenario that was run.
-     */
-    _documentChangeOutput: { type: String },
-
-    /**
-     * `true` while a scenario is running. Every scenario starts by wiping the shared demo state, so
-     * running two at once lets the second one pull state out from under the first.
-     */
-    _isScenarioRunning: { type: Boolean },
+    _translationRows: { type: Array },
   };
 
   constructor() {
@@ -222,18 +189,10 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     this._deleteLocal = true;
     this._deleteRemote = true;
 
-    this._translationOutput = "Run a scenario to see its result here (and in the console).";
-    this._pipelineOutput = "Run a scenario to see its result here (and in the console).";
-    this._translatorOutput = "Run a scenario to see its result here (and in the console).";
-    this._activationOutput = "Run a scenario to see its result here (and in the console).";
-    this._documentChangeOutput = "Run a scenario to see its result here (and in the console).";
-    this._realEndpointUrl = "";
-    this._realEndpointMethod = "GET";
-    this._translationSchemaString = `{
-  "posts": {
-    "*": { "title": { "contentType": "PLAIN" }, "body": { "contentType": "HTML" } }
-  }
-}`;
+    this._translationCollection = "cards";
+    this._translationLanguage = "hi";
+    this._translating = false;
+    this._translationRows = [];
   }
 
   firstUpdated(changedProps) {
@@ -251,219 +210,91 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     }
 
     return html`
-      ${this._translationTemplate} ${this._pipelineTemplate}
-      ${this._translatorTemplate} ${this._activationTemplate}
-      ${this._documentChangeTemplate} ${this._readByQueryTemplate}
-      ${this._readByDocTemplate} ${this._cancelQueryTemplate}
-      ${this._saveDeleteTemplate}
+      ${this._readByQueryTemplate} ${this._readByDocTemplate}
+      ${this._cancelQueryTemplate} ${this._saveDeleteTemplate}
+      ${this._translationTemplate}
     `;
   }
 
-  get _documentChangeTemplate() {
-    return html`
-      <div class="request-query_container card">
-        <h6 class="headline6">
-          Translation &mdash; document changes &amp; language changes
-        </h6>
-        <div class="translation-actions">
-          <dw-button
-            raised
-            ?disabled=${this._isScenarioRunning}
-            @click=${this._scenarioClick(this._runFieldDiffScenario)}
-            >D1. Diffed field update (~2s)</dw-button
-          >
-          <dw-button
-            raised
-            ?disabled=${this._isScenarioRunning}
-            @click=${this._scenarioClick(this._runFailureThenLanguageChangeScenario)}
-            >D2. Failure, then new language</dw-button
-          >
-          <dw-button
-            raised
-            ?disabled=${this._isScenarioRunning}
-            @click=${this._scenarioClick(this._runLanguageChangeAcrossActivationsScenario)}
-            >D3. One setLanguage, two activations</dw-button
-          >
-          <dw-button
-            raised
-            ?disabled=${this._isScenarioRunning}
-            @click=${this._scenarioClick(this._runStaleResponseScenario)}
-            >D4. Stale response discarded</dw-button
-          >
-        </div>
-
-        <h6 class="headline6">Result</h6>
-        <pre class="output">${this._documentChangeOutput}</pre>
-      </div>
-    `;
-  }
-
-  get _activationTemplate() {
-    return html`
-      <div class="request-query_container card">
-        <h6 class="headline6">
-          Translation &mdash; activation lifecycle
-          (<code>start</code> / <code>update</code> / <code>stop</code>)
-        </h6>
-        <div class="translation-actions">
-          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this._runBroadStartScenario)}
-            >A1. Broad start &amp; overlap</dw-button
-          >
-          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this._runScopeUpdateScenario)}
-            >A2. Narrow &amp; widen scope</dw-button
-          >
-          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this._runOverlappingStopScenario)}
-            >A3. Stop one of two</dw-button
-          >
-          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this._runLateArrivalScenario)}
-            >A4. Documents arriving later</dw-button
-          >
-        </div>
-
-        <h6 class="headline6">Result</h6>
-        <pre class="output">${this._activationOutput}</pre>
-      </div>
-    `;
-  }
-
-  get _translatorTemplate() {
-    return html`
-      <div class="request-query_container card">
-        <h6 class="headline6">
-          Translation &mdash; <code>setTranslator</code> and
-          <code>setLanguage</code>
-        </h6>
-        <div>
-          Every URL-form scenario below makes a <strong>real HTTP request</strong> to
-          <code>/translate</code>, served by <code>demo/translate-api-mock.js</code> per
-          <code>translate-api.openapi.yml</code>. Watch the DevTools <strong>Network</strong> tab
-          while they run. Each result is checked against what the <em>server</em> actually
-          received, not just what the client thinks it sent.
-        </div>
-        <div class="translation-actions">
-          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runTranslatorScenario1)}
-            >T1. Plain URL &rarr; GET</dw-button
-          >
-          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runTranslatorScenario2)}
-            >T2. POST &amp; default GET</dw-button
-          >
-          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runTranslatorScenario3)}
-            >T3. Function form</dw-button
-          >
-          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runTranslatorScenario4)}
-            >T4. No language yet</dw-button
-          >
-          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runRealApiScenario)}
-            >R. REAL public API (~8s)</dw-button
-          >
-        </div>
-
-        <h6 class="headline6">Result</h6>
-        <pre class="output">${this._translatorOutput}</pre>
-
-        <h6 class="headline6">Fire one call at a real endpoint</h6>
-        <div class="row">
-          <dw-input
-            dense
-            label="Translate endpoint URL"
-            placeholder="e.g. https://your-server/translate"
-            .value=${this._realEndpointUrl}
-            @value-changed=${(e) => {
-              this._realEndpointUrl = e.detail.value;
-            }}
-          ></dw-input>
-          <dw-input
-            dense
-            label="Method (GET or POST)"
-            .value=${this._realEndpointMethod}
-            @value-changed=${(e) => {
-              this._realEndpointMethod = e.detail.value;
-            }}
-          ></dw-input>
-        </div>
-        <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__callRealEndpoint)}
-          >Call real endpoint</dw-button
-        >
-      </div>
-    `;
-  }
-
-  get _pipelineTemplate() {
-    return html`
-      <div class="request-query_container card">
-        <h6 class="headline6">Translation &mdash; Translator request pipeline</h6>
-        <div>
-          Caps in force: <code>DEBOUNCE_WINDOW=${DEBOUNCE_WINDOW}ms</code>,
-          <code>MAX_ITEMS_PER_REQUEST=${MAX_ITEMS_PER_REQUEST}</code>,
-          <code>MAX_CHARS_PER_REQUEST=${MAX_CHARS_PER_REQUEST}</code>,
-          <code>MAX_CONCURRENT_REQUESTS=${MAX_CONCURRENT_REQUESTS}</code>
-        </div>
-        <div class="translation-actions">
-          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runPipelineScenario1)}
-            >P1. Wire addressing</dw-button
-          >
-          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runPipelineScenario2)}
-            >P2. Debouncing (~3s)</dw-button
-          >
-          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runPipelineScenario3)}
-            >P3. Chunking &amp; concurrency (~3s)</dw-button
-          >
-          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runPipelineScenario4)}
-            >P4. Fidelity</dw-button
-          >
-        </div>
-
-        <h6 class="headline6">Result</h6>
-        <pre class="output">${this._pipelineOutput}</pre>
-      </div>
-    `;
-  }
-
+  /**
+   * Minimal, complete example of the translation capability: configure a Translator, set a
+   * language, start an activation. Reads never change - `selectors.doc` returns the translation
+   * once it's ready. See wiki/translation/README.md.
+   */
   get _translationTemplate() {
     return html`
       <div class="request-query_container card">
-        <h6 class="headline6">
-          Translation &mdash; <code>/translations</code> state shape &amp;
-          <code>setSchema</code>
-        </h6>
-        <div class="translation-actions">
-          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runTranslationScenario1)}
-            >1. Shared language</dw-button
+        <h6 class="headline6">Translation</h6>
+        <p>
+          Three calls is the whole integration. Nothing changes at the read site &mdash;
+          <code>selectors.doc</code> returns the translated document once it's ready, the original
+          until then.
+        </p>
+        <pre>
+firestoreRedux.translation.setTranslator(translateFn);   // your translate API
+firestoreRedux.translation.setLanguage('${this._translationLanguage}');
+firestoreRedux.translation.start({
+  id: 'demo',
+  filterFunction: (doc, collection) => collection === '${this._translationCollection}',
+});</pre
+        >
+
+        <div class="row">
+          <dw-input
+            dense
+            label="Collection"
+            .value=${this._translationCollection}
+            @value-changed=${(e) => {
+              this._translationCollection = e.detail.value;
+            }}
+          ></dw-input>
+          <dw-input
+            dense
+            label="Language"
+            placeholder="e.g. hi, gu, mr, fr"
+            .value=${this._translationLanguage}
+            @value-changed=${(e) => {
+              this._translationLanguage = e.detail.value;
+            }}
+          ></dw-input>
+        </div>
+
+        <div class="switch-container row">
+          <dw-button outlined @click=${this._addSampleDocuments}
+            >Add sample documents</dw-button
           >
-          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runTranslationScenario2)}
-            >2. Own "status" field</dw-button
+          <dw-button raised ?disabled=${this._translating} @click=${this._startTranslating}
+            >Start translating</dw-button
           >
-          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runTranslationScenario3)}
-            >3. '*' + doc override</dw-button
-          >
-          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runTranslationScenario4)}
-            >4. Default skips &amp; contentType</dw-button
-          >
-          <dw-button outlined ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__resetTranslationState)}
-            >Reset</dw-button
+          <dw-button outlined ?disabled=${!this._translating} @click=${this._stopTranslating}
+            >Stop</dw-button
           >
         </div>
 
-        <h6 class="headline6">Result</h6>
-        <pre class="output">${this._translationOutput}</pre>
-
-        <h6 class="headline6">
-          Set a schema by hand (<code>translation.setSchema</code>)
-        </h6>
-        <dw-textarea
-          .minHeight=${100}
-          .maxHeight=${240}
-          .value=${this._translationSchemaString}
-          @value-changed=${(e) => {
-            this._translationSchemaString = e.detail.value;
-          }}
-        ></dw-textarea>
-        <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__setTranslationSchema)}
-          >Set Schema</dw-button
-        >
-
-        <h6 class="headline6">Current <code>/translations</code> state</h6>
-        <pre class="output">${this.__stringify(this._translationState)}</pre>
+        ${this._translationRows.length
+          ? html`
+              <table class="translation-table">
+                <tr>
+                  <th>Document</th>
+                  <th>Original (selectors.originalDoc)</th>
+                  <th>Translated (selectors.doc)</th>
+                  <th>Status</th>
+                </tr>
+                ${this._translationRows.map(
+                  (row) => html`
+                    <tr>
+                      <td>${row.docId}</td>
+                      <td>${row.original}</td>
+                      <td>${row.translated}</td>
+                      <td>${row.status}</td>
+                    </tr>
+                  `
+                )}
+              </table>
+            `
+          : html`<p class="hint">
+              Add the sample documents (or run a query above), then start translating.
+            </p>`}
       </div>
     `;
   }
@@ -915,732 +746,57 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
   }
 
   /**
-   * Scenario 1: two activations covering different collections, both translating into the same
-   * language - there must be no per-activation language field anywhere in state.
+   * Writes two documents into redux locally, so the translation example has something to work on
+   * without a Firestore project. A real app's documents arrive from a query instead.
    */
-  __runTranslationScenario1() {
-    store.dispatch(translationActions.setLanguage("hi"));
+  _addSampleDocuments() {
     store.dispatch(
-      translationActions._addActivation({
-        id: "posts-feed",
-        filterFunction: (doc, collection) => collection === "posts",
-      })
+      firestoreRedux.actions.save(
+        this._translationCollection,
+        [
+          {
+            id: "sample-1",
+            title: "Design the home page",
+            description: "New layout for the customer portal",
+            columnType: "IN_PROGRESS",
+            dueDate: "2026-08-11",
+          },
+          {
+            id: "sample-2",
+            title: "Review the launch checklist",
+            description: "Confirm every item before Friday",
+            columnType: "DONE",
+            dueDate: "2026-08-14",
+          },
+        ],
+        { localWrite: true, remoteWrite: false }
+      )
     );
-    store.dispatch(
-      translationActions._addActivation({
-        id: "comments-feed",
-        filterFunction: (doc, collection) => collection === "comments",
-      })
-    );
-
-    const { language, activations } = store.getState().translations;
-    const ids = Object.keys(activations);
-    const carryingLanguage = ids.filter((id) => "language" in activations[id]);
-
-    this.__reportTranslationScenario(
-      "Scenario 1 - two activations, one shared language",
-      [
-        `translations.language = ${JSON.stringify(language)}`,
-        ...ids.map(
-          (id) => `activations.${id} keys = [${Object.keys(activations[id]).join(", ")}]`
-        ),
-        this.__check(language === "hi", `single top-level language is 'hi'`),
-        this.__check(ids.length === 2, `both activations are stored (${ids.length})`),
-        this.__check(
-          carryingLanguage.length === 0,
-          `no activation carries its own 'language' field`
-        ),
-      ],
-      { language, activations }
-    );
+    this._refreshTranslationRows();
   }
 
   /**
-   * Scenario 2: a document whose own real field is named `status`. The clone must hold the
-   * document's value; the translation status lives in the separate `status` branch.
+   * The three integrator calls. The Translator here is a free public API wired through the function
+   * form - swap it for your own endpoint, or pass a URL string to use the URL form instead.
    */
-  __runTranslationScenario2() {
-    const original = {
-      id: "post_123",
-      title: "Design home page",
-      status: "IN_PROGRESS",
-    };
-
-    store.dispatch(
-      translationActions._setTranslatedDoc("posts", "post_123", {
-        ...original,
-        title: "होम पेज डिज़ाइन करें",
-      })
-    );
-    store.dispatch(
-      translationActions._setDocStatus("posts", "post_123", {
-        status: Status.SUCCESS,
-        failedFields: [],
-      })
-    );
-
-    const { docs, status } = store.getState().translations;
-    const clone = docs.posts.post_123;
-    const docStatus = status.posts.post_123;
-
-    this.__reportTranslationScenario(
-      "Scenario 2 - a document field named 'status' never collides with translation metadata",
-      [
-        `docs.posts.post_123   = ${JSON.stringify(clone)}`,
-        `status.posts.post_123 = ${JSON.stringify(docStatus)}`,
-        this.__check(
-          clone.status === "IN_PROGRESS",
-          `the clone's 'status' holds the document's own value`
-        ),
-        this.__check(
-          docStatus.status === Status.SUCCESS,
-          `the translation status is 'SUCCESS', in its own branch`
-        ),
-        this.__check(
-          clone.failedFields === undefined,
-          `no translation metadata leaked into the clone`
-        ),
-      ],
-      { clone, docStatus }
-    );
-  }
-
-  /**
-   * Scenario 3: a `'*'` schema entry plus a specific-document override - only that document uses
-   * the override.
-   */
-  __runTranslationScenario3() {
-    firestoreRedux.translation.setSchema({
-      posts: {
-        "*": { title: { contentType: "PLAIN" } },
-        post_123: { title: { skip: true } },
-      },
-    });
-
-    const schema = translationSelectors.schema(store.getState());
-    const wildcard = translatableFields(
-      { id: "post_999", title: "Design home page" },
-      "posts",
-      schema
-    );
-    const overridden = translatableFields(
-      { id: "post_123", title: "Design home page" },
-      "posts",
-      schema
-    );
-
-    this.__reportTranslationScenario(
-      "Scenario 3 - '*' covers the collection, a document Id overrides it",
-      [
-        `post_999 (uses '*')      -> ${JSON.stringify(wildcard)}`,
-        `post_123 (own override)  -> ${JSON.stringify(overridden)}`,
-        this.__check(
-          wildcard.length === 1 && wildcard[0].contentType === "PLAIN",
-          `post_999's title is translatable, as PLAIN, from the '*' entry`
-        ),
-        this.__check(
-          overridden.length === 0,
-          `post_123's title is skipped by its own entry`
-        ),
-      ],
-      { wildcard, overridden }
-    );
-  }
-
-  /**
-   * Scenario 4: default skips (including an `IN_PROGRESS`-shaped value), `{ skip: false }` forcing
-   * a skipped field back in, and an undeclared `contentType` staying genuinely absent.
-   */
-  __runTranslationScenario4() {
-    const doc = {
-      id: "post_1",
-      title: "Design home page",
-      columnType: "IN_PROGRESS",
-      body: "<p>New layout for the customer portal</p>",
-      views: 42,
-      rank: "3.5",
-      dueDate: "2026-08-11",
-      archived: false,
-      note: null,
-      owner: { name: "Nirmal" },
-    };
-
-    firestoreRedux.translation.setSchema({});
-    const withoutSchema = translatableFields(
-      doc,
-      "posts",
-      translationSelectors.schema(store.getState())
-    );
-
-    firestoreRedux.translation.setSchema({
-      posts: {
-        "*": { columnType: { skip: false }, body: { contentType: "HTML" } },
-      },
-    });
-    const withSchema = translatableFields(
-      doc,
-      "posts",
-      translationSelectors.schema(store.getState())
-    );
-
-    const titleField = withSchema.find(({ path }) => path === "title");
-    const bodyField = withSchema.find(({ path }) => path === "body");
-
-    this.__reportTranslationScenario(
-      "Scenario 4 - automatic skips, skip:false, and an absent contentType",
-      [
-        `no schema   -> ${withoutSchema.map(({ path }) => path).join(", ")}`,
-        `with schema -> ${withSchema.map(({ path }) => path).join(", ")}`,
-        `every item's keys, no schema: ${withoutSchema
-          .map(({ path, ...rest }) => `${path}:[${Object.keys(rest).join(",")}]`)
-          .join("  ")}`,
-        this.__check(
-          !withoutSchema.some(({ path }) => path === "columnType"),
-          `'IN_PROGRESS' is skipped automatically with no schema entry`
-        ),
-        this.__check(
-          withSchema.some(({ path }) => path === "columnType"),
-          `{ skip: false } brings 'columnType' back in`
-        ),
-        this.__check(
-          withoutSchema.every((field) => !("contentType" in field)),
-          `no undeclared field carries a contentType key at all - not even 'PLAIN'`
-        ),
-        this.__check(
-          titleField && !("contentType" in titleField),
-          `'title' stays absent while a sibling declares one`
-        ),
-        this.__check(
-          bodyField && bodyField.contentType === "HTML",
-          `'body' carries its declared HTML contentType`
-        ),
-        this.__check(
-          ["views", "rank", "dueDate", "archived", "note", "id"].every(
-            (path) => !withoutSchema.some((field) => field.path === path)
-          ),
-          `number / numeric string / date / boolean / null / id are all left out`
-        ),
-      ],
-      { withoutSchema, withSchema }
-    );
-  }
-
-  /**
-   * P1: a collection/docId/field-path triple containing `.` and `-` round-trips through the wire id.
-   */
-  __runPipelineScenario1() {
-    const triples = [
-      ["posts", "post_123", "title"],
-      ["my-posts.v2", "doc-1.2-3", "members[0].name"],
-      ["a-b.c", "d.e-f", "address.city"],
-    ];
-
-    const lines = [];
-    triples.forEach(([collection, docId, fieldPath]) => {
-      const wireId = toWireId(collection, docId, fieldPath);
-      const parts = fromWireId(wireId);
-      lines.push(`in   : collection="${collection}"  docId="${docId}"  fieldPath="${fieldPath}"`);
-      lines.push(`wire : ${wireId}`);
-      lines.push(`out  : ${JSON.stringify(parts)}`);
-      lines.push(
-        this.__check(
-          parts.collection === collection && parts.docId === docId && parts.fieldPath === fieldPath,
-          `reconstructs exactly, despite '.' and '-' inside the parts`
-        )
-      );
-      lines.push("");
-    });
-
-    let threw = false;
-    try {
-      fromWireId("no-separators-here");
-    } catch (error) {
-      threw = true;
+  _startTranslating() {
+    if (!this._translationLanguage) {
+      alert("Please enter a target language.");
+      return;
     }
-    lines.push(this.__check(threw, `a malformed wire id is rejected rather than silently mis-split`));
-
-    this.__reportPipelineScenario("P1 - wire addressing round-trip", lines, { triples });
-  }
-
-  /**
-   * P2: rapid updates to one document collapse into a single call, and a second document debounces
-   * independently instead of queueing behind the first.
-   */
-  async __runPipelineScenario2() {
-    this._pipelineOutput = "Running... (about 3 seconds)";
-    const calls = this.__installStubTranslator({ latency: 900 });
-    this.__seedDoc("posts", { id: "doc-a", title: "v0" });
-    this.__seedDoc("posts", { id: "doc-b", title: "w0" });
-    store.dispatch(translationActions._removeDocTranslation("posts", "doc-a"));
-    store.dispatch(translationActions._removeDocTranslation("posts", "doc-b"));
-    store.dispatch(translationActions.setLanguage("hi"));
-
-    for (let i = 1; i <= 5; i++) {
-      this.__translate("posts", "doc-a", [{ path: "title", value: `v${i}` }], true);
-      await this.__wait(40);
-    }
-    await this.__wait(120);
-    for (let i = 1; i <= 5; i++) {
-      this.__translate("posts", "doc-b", [{ path: "title", value: `w${i}` }], true);
-      await this.__wait(40);
-    }
-    await this.__wait(DEBOUNCE_WINDOW + 1400);
-
-    const callA = calls.find((c) => c.ids[0].startsWith("posts/doc-a/"));
-    const callB = calls.find((c) => c.ids[0].startsWith("posts/doc-b/"));
-    const { docs } = store.getState().translations;
-
-    this.__reportPipelineScenario(
-      "P2 - per-document debouncing",
-      [
-        `10 updates were made (5 to doc-a, 5 to doc-b, 40ms apart)`,
-        `translate calls fired: ${calls.length}  -> ${JSON.stringify(calls.map((c) => c.ids))}`,
-        `doc-a call started at +0ms, finished at +${callA ? callA.finishedAt - callA.startedAt : "-"}ms`,
-        `doc-b call started ${callB && callA ? callB.startedAt - callA.startedAt : "-"}ms after doc-a's started`,
-        this.__check(calls.length === 2, `5 rapid updates per document collapsed into ONE call each`),
-        this.__check(
-          !!callA && !!callB && callB.startedAt - callA.startedAt < 900,
-          `doc-b was NOT serialized behind doc-a's 900ms in-flight request`
-        ),
-        this.__check(
-          docs.posts["doc-a"].title === "[hi] v5" && docs.posts["doc-b"].title === "[hi] w5",
-          `only the final value of each document was translated (v5 / w5, not v1..v4)`
-        ),
-      ],
-      { calls, docs: docs.posts }
-    );
-  }
-
-  /**
-   * P3: a document exceeding the per-request item cap splits into batches, newest-relevant-first,
-   * with excess batches queueing behind the concurrency cap. Then the same for the character cap.
-   */
-  async __runPipelineScenario3() {
-    this._pipelineOutput = "Running... (about 3 seconds)";
-
-    const doc = { id: "doc-big" };
-    for (let i = 0; i < 200; i++) {
-      doc[`field_${i}`] = `text number ${i}`;
-    }
-    let calls = this.__installStubTranslator({ latency: 500 });
-    this.__seedDoc("posts", doc);
-    store.dispatch(translationActions._removeDocTranslation("posts", "doc-big"));
-    store.dispatch(translationActions.setLanguage("hi"));
-
-    const fields = [];
-    for (let i = 0; i < 200; i++) {
-      fields.push({ path: `field_${i}`, value: `text number ${i}` });
-    }
-    this.__translate("posts", "doc-big", fields, false);
-
-    const immediate = calls.length;
-    const peakConcurrency = Math.max(...calls.map((c) => c.concurrentAtStart));
-    await this.__wait(1800);
-
-    const itemCapLines = [
-      `200 fields queued at once`,
-      `batches sent immediately: ${immediate}   (concurrency cap is ${MAX_CONCURRENT_REQUESTS})`,
-      `batches after the queue drained: ${calls.length}`,
-      `batch sizes: ${JSON.stringify(calls.map((c) => c.count))}`,
-      `batch 1 spans: ${calls[0].ids[0]} .. ${calls[0].ids[calls[0].ids.length - 1]}`,
-      `batch 4 spans: ${calls[3] ? calls[3].ids[0] : "-"} .. ${calls[3] ? calls[3].ids[calls[3].ids.length - 1] : "-"}`,
-      this.__check(calls.length === 4, `split into 4 batches of ${MAX_ITEMS_PER_REQUEST}`),
-      this.__check(immediate === MAX_CONCURRENT_REQUESTS, `only ${MAX_CONCURRENT_REQUESTS} went out at once - the 4th queued`),
-      this.__check(peakConcurrency <= MAX_CONCURRENT_REQUESTS, `concurrency never exceeded the cap (peak ${peakConcurrency})`),
-      this.__check(
-        calls.every((c) => c.count <= MAX_ITEMS_PER_REQUEST),
-        `every batch respects the item cap`
-      ),
-      this.__check(
-        calls[0].ids[0] === "posts/doc-big/field_150" && calls[0].ids[49] === "posts/doc-big/field_199",
-        `newest-relevant-first: batch 1 carries fields 150-199, in queue order within the batch`
-      ),
-      this.__check(
-        store.getState().translations.status.posts["doc-big"].status === Status.SUCCESS,
-        `status written only once ALL 4 batches settled`
-      ),
-    ];
-
-    // Character cap - 5 fields of 6000 chars each.
-    const big = "x".repeat(6000);
-    const charDoc = { id: "doc-chars" };
-    [0, 1, 2, 3, 4].forEach((i) => (charDoc[`f${i}`] = big));
-    calls = this.__installStubTranslator({ latency: 0 });
-    this.__seedDoc("posts", charDoc);
-    store.dispatch(translationActions._removeDocTranslation("posts", "doc-chars"));
-    this.__translate(
-      "posts",
-      "doc-chars",
-      [0, 1, 2, 3, 4].map((i) => ({ path: `f${i}`, value: big })),
-      false
-    );
-    await this.__wait(300);
-
-    this.__reportPipelineScenario(
-      "P3 - chunking and concurrency",
-      [
-        ...itemCapLines,
-        "",
-        `5 fields x 6000 chars = 30000 chars, cap is ${MAX_CHARS_PER_REQUEST}`,
-        `batch sizes: ${JSON.stringify(calls.map((c) => c.count))}   chars: ${JSON.stringify(calls.map((c) => c.chars))}`,
-        this.__check(calls.length === 2, `split by the character cap into 2 batches`),
-        this.__check(
-          calls.every((c) => c.chars <= MAX_CHARS_PER_REQUEST),
-          `no batch exceeded ${MAX_CHARS_PER_REQUEST} characters`
-        ),
-      ],
-      { calls }
-    );
-  }
-
-  /**
-   * P4: a translation whose tag set doesn't match the source fails that field only - the original
-   * is kept and the field is named in `failedFields`. A matching one is accepted.
-   */
-  async __runPipelineScenario4() {
-    const source = '<p>New layout for the <a href="/portal">customer portal</a></p>';
-    const doc = { id: "doc-html", title: "Design home page", body: source, note: "Keep it simple" };
-
-    // Pass 1 - the Translator drops the <a> from the HTML field.
-    this.__installStubTranslator({
-      mangle: (id, item, language) =>
-        id.endsWith("/body")
-          ? { text: "<p>ग्राहक पोर्टल के लिए नया लेआउट</p>", success: true }
-          : { text: `[${language}] ${item.text}`, success: true },
-    });
-    this.__seedDoc("posts", doc);
-    store.dispatch(translationActions._removeDocTranslation("posts", "doc-html"));
-    store.dispatch(translationActions.setLanguage("hi"));
-
-    const fields = [
-      { path: "title", value: doc.title, contentType: "PLAIN" },
-      { path: "body", value: source, contentType: "HTML" },
-      { path: "note", value: doc.note },
-    ];
-    this.__translate("posts", "doc-html", fields, false);
-    await this.__wait(200);
-
-    const broken = store.getState().translations;
-    const brokenLines = [
-      `source   : ${source}`,
-      `returned : <p>ग्राहक पोर्टल के लिए नया लेआउट</p>      <-- the <a href="/portal"> is gone`,
-      `stored   : ${broken.docs.posts["doc-html"].body}`,
-      `status   : ${JSON.stringify(broken.status.posts["doc-html"])}`,
-      this.__check(broken.docs.posts["doc-html"].body === source, `the tag-broken field kept its ORIGINAL value (not null)`),
-      this.__check(
-        broken.docs.posts["doc-html"].title === "[hi] Design home page" &&
-          broken.docs.posts["doc-html"].note === "[hi] Keep it simple",
-        `its siblings on the same document translated fine - failure is per field`
-      ),
-      this.__check(broken.status.posts["doc-html"].status === Status.PARTIAL_FAILURE, `status is PARTIAL_FAILURE`),
-      this.__check(
-        JSON.stringify(broken.status.posts["doc-html"].failedFields) === '["body"]',
-        `failedFields names exactly that one field`
-      ),
-    ];
-
-    // Pass 2 - a faithful translation of the same field.
-    const faithful = '<p>ग्राहक <a href="/portal">पोर्टल</a> के लिए नया लेआउट</p>';
-    this.__installStubTranslator({
-      mangle: (id, item, language) =>
-        id.endsWith("/body") ? { text: faithful, success: true } : { text: `[${language}] ${item.text}`, success: true },
-    });
-    store.dispatch(translationActions._removeDocTranslation("posts", "doc-html"));
-    this.__translate("posts", "doc-html", fields, false);
-    await this.__wait(200);
-
-    const ok = store.getState().translations;
-
-    this.__reportPipelineScenario(
-      "P4 - fidelity validation",
-      [
-        "PASS 1 - tag set does NOT match",
-        ...brokenLines,
-        "",
-        "PASS 2 - tag set matches (tags reordered, but same multiset)",
-        `returned : ${faithful}`,
-        `stored   : ${ok.docs.posts["doc-html"].body}`,
-        `status   : ${JSON.stringify(ok.status.posts["doc-html"])}`,
-        this.__check(ok.docs.posts["doc-html"].body === faithful, `accepted - the translated value is stored`),
-        this.__check(ok.status.posts["doc-html"].status === Status.SUCCESS, `status is SUCCESS`),
-        this.__check(
-          fidelityPreserved(source, faithful, "HTML") && !fidelityPreserved(source, "<p>x</p>", "HTML"),
-          `fidelityPreserved() agrees directly`
-        ),
-      ],
-      { broken: broken.status.posts["doc-html"], ok: ok.status.posts["doc-html"] }
-    );
-  }
-
-  /**
-   * T1: a plain URL string produces a GET with query params and `credentials: 'include'`.
-   */
-  async __runTranslatorScenario1() {
-    this._translatorOutput = "Running...";
-    const spy = this.__spyFetch();
-    await this.__resetServerLog();
-
-    firestoreRedux.translation.setTranslator("/translate");
-    const doc = { id: "url-get", title: "Design home page", body: "<p>New layout</p>" };
-    this.__prepareDoc(doc);
-    firestoreRedux.translation.setLanguage("hi");
-    this.__translate("posts", "url-get", [
-      { path: "title", value: doc.title },
-      { path: "body", value: doc.body, contentType: "HTML" },
-    ]);
-    await this.__wait(500);
-
-    spy.restore();
-    const [request] = await this.__serverLog();
-    const call = spy.calls[0] || {};
-    const clone = store.getState().translations.docs.posts["url-get"];
-
-    this.__reportTranslatorScenario(
-      "T1 - plain URL string -> GET with query params",
-      [
-        `server saw   : ${request ? request.method : "(no request)"} /translate`,
-        `query params : ${JSON.stringify(request && request.query)}`,
-        `fetch init   : ${JSON.stringify(call.init)}`,
-        `cookie seen  : ${request && request.cookie}`,
-        `stored       : ${JSON.stringify(clone)}`,
-        this.__check(!!request && request.method === "GET", `a real GET request reached the server`),
-        this.__check(!!request && request.targetLanguage === "hi", `targetLanguage travelled as a query param`),
-        this.__check(
-          !!request && typeof request.query.items === "string" && request.itemCount === 2,
-          `items travelled JSON-encoded in a single query param, both items present`
-        ),
-        this.__check(call.init && call.init.credentials === "include", `called with credentials: 'include'`),
-        this.__check(!!request && !!request.cookie, `the browser's cookie actually reached the server`),
-        this.__check(
-          !!request && JSON.stringify(request.itemKeys["posts/url-get/title"]) === '["text"]',
-          `undeclared contentType arrived genuinely absent on the wire`
-        ),
-        this.__check(
-          !!request && JSON.stringify(request.itemKeys["posts/url-get/body"]) === '["text","contentType"]',
-          `declared contentType arrived alongside the text`
-        ),
-        this.__check(clone.title === "[hi] Design home page", `the server's response landed in redux`),
-      ],
-      { request, fetchInit: call.init }
-    );
-  }
-
-  /**
-   * T2: `{ url, method: 'POST' }` sends a JSON body; `{ url }` with no method behaves like the
-   * plain-string GET form.
-   */
-  async __runTranslatorScenario2() {
-    this._translatorOutput = "Running...";
-    const spy = this.__spyFetch();
-    await this.__resetServerLog();
-
-    firestoreRedux.translation.setTranslator({ url: "/translate", method: "POST" });
-    this.__prepareDoc({ id: "url-post", note: "Keep it simple" });
-    firestoreRedux.translation.setLanguage("hi");
-    this.__translate("posts", "url-post", [{ path: "note", value: "Keep it simple" }]);
-    await this.__wait(400);
-
-    firestoreRedux.translation.setTranslator({ url: "/translate" });
-    this.__prepareDoc({ id: "url-default", note: "No method given" });
-    this.__translate("posts", "url-default", [{ path: "note", value: "No method given" }]);
-    await this.__wait(400);
-
-    spy.restore();
-    const [postRequest, defaultRequest] = await this.__serverLog();
-    const { docs } = store.getState().translations;
-
-    this.__reportTranslatorScenario(
-      "T2 - { url, method: 'POST' } and { url } with no method",
-      [
-        `POST    : ${postRequest && postRequest.method}  content-type=${postRequest && postRequest.contentType}`,
-        `body    : ${postRequest && postRequest.rawBody}`,
-        `query   : ${JSON.stringify(postRequest && postRequest.query)}`,
-        this.__check(!!postRequest && postRequest.method === "POST", `a real POST reached the server`),
-        this.__check(
-          !!postRequest && (postRequest.contentType || "").includes("application/json"),
-          `sent as application/json`
-        ),
-        this.__check(
-          !!postRequest && JSON.parse(postRequest.rawBody || "{}").targetLanguage === "hi",
-          `{ targetLanguage, items } travelled in the JSON body`
-        ),
-        this.__check(
-          !!postRequest && Object.keys(postRequest.query).length === 0,
-          `nothing was smuggled into the query string`
-        ),
-        "",
-        `no method : ${defaultRequest && defaultRequest.method}`,
-        `query     : ${JSON.stringify(defaultRequest && defaultRequest.query)}`,
-        this.__check(!!defaultRequest && defaultRequest.method === "GET", `{ url } with no method defaults to GET`),
-        this.__check(
-          !!defaultRequest && typeof defaultRequest.query.items === "string",
-          `and carries its params exactly like the plain-string form`
-        ),
-        this.__check(
-          docs.posts["url-post"].note === "[hi] Keep it simple" &&
-            docs.posts["url-default"].note === "[hi] No method given",
-          `both forms produced translated values in redux`
-        ),
-      ],
-      { postRequest, defaultRequest }
-    );
-  }
-
-  /**
-   * T3: the function form is called in-process - the library itself makes no HTTP request.
-   */
-  async __runTranslatorScenario3() {
-    this._translatorOutput = "Running...";
-    const spy = this.__spyFetch();
-    await this.__resetServerLog();
-
-    let receivedRequest;
-    firestoreRedux.translation.setTranslator(async ({ targetLanguage, items }) => {
-      receivedRequest = { targetLanguage, itemIds: Object.keys(items), items };
-      const translated = {};
-      Object.entries(items).forEach(([id, item]) => {
-        translated[id] = { text: `«${targetLanguage}» ${item.text}`, success: true };
-      });
-      return { targetLanguage, items: translated };
-    });
-
-    this.__prepareDoc({ id: "fn-form", title: "Design home page" });
-    firestoreRedux.translation.setLanguage("hi");
-    this.__translate("posts", "fn-form", [{ path: "title", value: "Design home page" }]);
-    await this.__wait(300);
-
-    spy.restore();
-    const serverLog = await this.__serverLog();
-    const clone = store.getState().translations.docs.posts["fn-form"];
-
-    this.__reportTranslatorScenario(
-      "T3 - function form, called in-process",
-      [
-        `function received : ${JSON.stringify(receivedRequest)}`,
-        `requests the library made : ${spy.calls.length}`,
-        `requests the server saw   : ${serverLog.length}`,
-        `stored : ${JSON.stringify(clone)}`,
-        this.__check(!!receivedRequest, `the function was called`),
-        this.__check(
-          !!receivedRequest && receivedRequest.targetLanguage === "hi" && receivedRequest.itemIds.length === 1,
-          `called with { targetLanguage, items } keyed by wire id`
-        ),
-        this.__check(spy.calls.length === 0, `the library made NO fetch call of its own`),
-        this.__check(serverLog.length === 0, `and the server saw no request at all`),
-        this.__check(clone.title === "«hi» Design home page", `its return value landed in redux`),
-      ],
-      { receivedRequest, serverLog }
-    );
-  }
-
-  /**
-   * T4: nothing translates until a language is set, however configured the Translator is.
-   */
-  async __runTranslatorScenario4() {
-    this._translatorOutput = "Running...";
-    const spy = this.__spyFetch();
-    await this.__resetServerLog();
-
-    firestoreRedux.translation.setTranslator("/translate");
-    store.dispatch(translationActions.setLanguage(undefined));
-    this.__prepareDoc({ id: "no-lang", title: "Design home page" });
-
-    const fields = [{ path: "title", value: "Design home page" }];
-    this.__translate("posts", "no-lang", fields);
-    await this.__wait(300);
-
-    const beforeLog = await this.__serverLog();
-    const beforeState = store.getState().translations;
-
-    firestoreRedux.translation.setLanguage("hi");
-    this.__translate("posts", "no-lang", fields);
-    await this.__wait(400);
-
-    spy.restore();
-    const afterLog = await this.__serverLog();
-    const afterState = store.getState().translations;
-
-    let rejected;
-    try {
-      firestoreRedux.translation.setLanguage("");
-      rejected = "NO ERROR THROWN";
-    } catch (error) {
-      rejected = String(error);
-    }
-
-    this.__reportTranslatorScenario(
-      "T4 - a Translator alone isn't enough; a language is required too",
-      [
-        `BEFORE setLanguage`,
-        `  language        : ${JSON.stringify(beforeState.language)}`,
-        `  requests sent   : ${beforeLog.length}`,
-        `  status entry    : ${JSON.stringify(beforeState.status.posts && beforeState.status.posts["no-lang"])}`,
-        this.__check(beforeLog.length === 0, `no translate request was made with no language set`),
-        this.__check(
-          !beforeState.status.posts || !beforeState.status.posts["no-lang"],
-          `and nothing was written to /translations`
-        ),
-        "",
-        `AFTER setLanguage('hi')`,
-        `  requests sent   : ${afterLog.length}`,
-        `  stored          : ${JSON.stringify(afterState.docs.posts["no-lang"])}`,
-        `  status entry    : ${JSON.stringify(afterState.status.posts["no-lang"])}`,
-        this.__check(afterLog.length === 1, `the same call now goes out`),
-        this.__check(
-          afterState.docs.posts["no-lang"].title === "[hi] Design home page",
-          `and the translation lands`
-        ),
-        "",
-        `setLanguage('') -> ${rejected}`,
-        this.__check(rejected !== "NO ERROR THROWN", `an empty language is rejected`),
-        "",
-        `NOTE: the other half of this scenario - "start before setLanguage keeps tracking matches" -`,
-        `needs activations, which arrive in the next unit.`,
-      ],
-      { beforeLog, afterLog }
-    );
-  }
-
-  /**
-   * R: the whole chain against a REAL machine-translation service - schema -> translatableFields ->
-   * wire ids -> live HTTP -> fidelity check -> redux. api.mymemory.translated.net doesn't implement
-   * translate-api.openapi.yml, so it's wired through the function form, exactly as the docs
-   * prescribe for a non-conforming API.
-   */
-  async __runRealApiScenario() {
-    this._translatorOutput = "Calling api.mymemory.translated.net over the real network...";
-    const lines = [];
-    const say = (line) => lines.push(line);
-
-    const batches = [];
-    const httpRequests = [];
 
     firestoreRedux.translation.setTranslator(async ({ targetLanguage, items }) => {
-      batches.push({
-        batchNumber: batches.length + 1,
-        targetLanguage,
-        itemIds: Object.keys(items),
-        items: cloneDeep(items),
-      });
-
       const results = await Promise.all(
         Object.entries(items).map(async ([id, item]) => {
           const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
             item.text
           )}&langpair=en|${targetLanguage}`;
-          const request = { wireId: id, method: "GET", url, contentTypeSent: item.contentType };
-          httpRequests.push(request);
           try {
-            const response = await fetch(url);
-            request.httpStatus = response.status;
-            const data = await response.json();
-            request.rawResponse = data;
-            if (data.responseStatus !== 200 || !data.responseData) {
-              return [id, { text: item.text, success: false, error: data.responseDetails || "failed" }];
-            }
-            return [id, { text: data.responseData.translatedText, success: true }];
+            const data = await (await fetch(url)).json();
+            return data.responseStatus === 200
+              ? [id, { text: data.responseData.translatedText, success: true }]
+              : [id, { text: item.text, success: false, error: String(data.responseDetails) }];
           } catch (error) {
-            request.error = String(error);
             return [id, { text: item.text, success: false, error: String(error) }];
           }
         })
@@ -1648,1017 +804,40 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
       return { targetLanguage, items: Object.fromEntries(results) };
     });
 
-    firestoreRedux.translation.setSchema({
-      posts: { "*": { title: { contentType: "PLAIN" }, body: { contentType: "HTML" } } },
+    firestoreRedux.translation.setLanguage(this._translationLanguage);
+    firestoreRedux.translation.start({
+      id: "demo",
+      filterFunction: (doc, collection) => collection === this._translationCollection,
     });
 
-    const doc = {
-      id: "real-doc",
-      title: "Design the home page",
-      body: '<p>New layout for the <a href="/portal">customer portal</a></p>',
-      columnType: "IN_PROGRESS",
-      views: 42,
-      dueDate: "2026-08-11",
-      archived: false,
-      note: null,
-    };
-    this.__prepareDoc(doc);
-    firestoreRedux.translation.setLanguage("hi");
+    this._translating = true;
+    this._refreshTranslationRows();
+  }
 
-    const original = firestoreRedux.selectors.doc(store.getState(), "posts", "real-doc");
-    const schema = translationSelectors.schema(store.getState());
-    const fields = translatableFields(original, "posts", schema);
+  _stopTranslating() {
+    firestoreRedux.translation.stop("demo");
+    this._translating = false;
+    this._refreshTranslationRows();
+  }
 
-    // ---------------- STEP 1 ----------------
-    say("STEP 1 - BEFORE REQUEST: which fields were selected, and why");
-    say("");
-    say("  FIELD         DECISION    VALUE                                       WHY");
-    say("  " + "-".repeat(112));
-    const fieldSchema = documentFieldSchema(schema, "posts", original.id);
-    Object.entries(original).forEach(([key, value]) => {
-      const declared = fieldSchema[key];
-      let decision = "TRANSLATE";
-      let why;
-      if (declared && declared.skip === true) {
-        decision = "SKIPPED";
-        why = "schema declares skip: true";
-      } else if (typeof value !== "string") {
-        decision = "SKIPPED";
-        why = `not a string (${value === null ? "null" : typeof value})`;
-      } else if (!value.trim()) {
-        decision = "SKIPPED";
-        why = "empty / whitespace only";
-      } else {
-        const reason = skipReason(value, key);
-        if (reason && !(declared && declared.skip === false)) {
-          decision = "SKIPPED";
-          why = `auto: ${reason}`;
-        } else {
-          why = declared && declared.contentType
-            ? `schema contentType: ${declared.contentType}`
-            : "no contentType declared -> sent ABSENT on the wire";
-        }
+  /**
+   * Rebuilds the table from the selectors, so it shows exactly what an app would read.
+   */
+  _refreshTranslationRows() {
+    const state = store.getState();
+    const rows = [];
+    forEach(
+      firestoreRedux.selectors.collection(state, this._translationCollection),
+      (document, docId) => {
+        rows.push({
+          docId,
+          original: firestoreRedux.selectors.originalDoc(state, this._translationCollection, docId).title,
+          translated: firestoreRedux.selectors.doc(state, this._translationCollection, docId).title,
+          status: firestoreRedux.selectors.translation.status(state, this._translationCollection, docId),
+        });
       }
-      say(
-        `  ${key.padEnd(13)} ${decision.padEnd(11)} ${String(JSON.stringify(value)).slice(0, 43).padEnd(43)} ${why}`
-      );
-    });
-    say("");
-    say(`  => translatableFields() returned: ${JSON.stringify(fields.map((f) => f.path))}`);
-    say(`  => exact items it built: ${JSON.stringify(fields)}`);
-    say("");
-
-    this._translatorOutput = lines.join("\n");
-    this.__translate("posts", "real-doc", fields);
-    await this.__wait(8000);
-
-    // ---------------- STEP 2 ----------------
-    say("STEP 2 - NETWORK: the actual requests that left the browser");
-    say("");
-    httpRequests.forEach((request, index) => {
-      say(`  [${index + 1}] ${request.method} ${decodeURIComponent(request.url)}`);
-      say(`      host        : ${new URL(request.url).host}`);
-      say(`      HTTP status : ${request.httpStatus}`);
-      say(`      match score : ${request.rawResponse && request.rawResponse.responseData.match}`);
-    });
-    const hosts = [...new Set(httpRequests.map((r) => new URL(r.url).host))];
-    say("");
-    say(`  distinct hosts contacted : ${JSON.stringify(hosts)}`);
-    say(
-      this.__check(
-        hosts.length === 1 && hosts[0] === "api.mymemory.translated.net",
-        `every request went to the REAL public API, not localhost and not the mock`
-      )
     );
-    say(this.__check(!hosts.includes("localhost:8000"), `demo/translate-api-mock.js was NOT involved`));
-    say("");
-
-    // ---------------- STEP 3 ----------------
-    say("STEP 3 - PIPELINE: batching");
-    say("");
-    say(`  translatable fields         : ${fields.length}`);
-    say(`  MAX_ITEMS_PER_REQUEST       : ${MAX_ITEMS_PER_REQUEST}`);
-    say(`  MAX_CHARS_PER_REQUEST       : ${MAX_CHARS_PER_REQUEST}`);
-    say(`  => batches the pipeline made: ${batches.length}`);
-    batches.forEach((batch) => {
-      say(`     batch ${batch.batchNumber}: targetLanguage="${batch.targetLanguage}", ${batch.itemIds.length} item(s)`);
-      batch.itemIds.forEach((wireId) => {
-        say(`        ${wireId}  ->  keys ${JSON.stringify(Object.keys(batch.items[wireId]))}`);
-      });
-    });
-    say("");
-    say(`  NOTE: 1 batch -> 1 Translator invocation -> ${httpRequests.length} upstream HTTP calls,`);
-    say(`  because MyMemory translates one string per request. The fan-out is the Translator's`);
-    say(`  business, not the library's - the library made exactly ${batches.length} call to it.`);
-    say(
-      this.__check(
-        batches.length === 1,
-        `${fields.length} fields fit under the ${MAX_ITEMS_PER_REQUEST}-item cap, so ONE batch was sent`
-      )
-    );
-    say(
-      this.__check(
-        "contentType" in batches[0].items["posts/real-doc/title"],
-        `title carried its declared contentType (PLAIN) onto the wire`
-      )
-    );
-    say("");
-
-    // ---------------- STEP 4 ----------------
-    const state = store.getState().translations;
-    const clone = state.docs.posts["real-doc"];
-    const docStatus = state.status.posts["real-doc"];
-
-    say("STEP 4 - RESPONSE: original vs translated, side by side");
-    say("");
-    Object.keys(original).forEach((key) => {
-      const wasTranslated = fields.some((f) => f.path === key);
-      say(`  ${key}   ${wasTranslated ? "[translated]" : "[copied through]"}`);
-      say(`     EN : ${JSON.stringify(original[key])}`);
-      say(`     HI : ${JSON.stringify(clone[key])}`);
-    });
-    say("");
-    say(
-      this.__check(
-        clone.columnType === "IN_PROGRESS" && clone.views === 42 && clone.dueDate === "2026-08-11" &&
-          clone.archived === false && clone.note === null,
-        `every non-translatable field is byte-identical to the original`
-      )
-    );
-    say(this.__check(/[ऀ-ॿ]/.test(clone.title), `title came back in Devanagari script`));
-    say("");
-
-    // ---------------- STEP 5 ----------------
-    const sourceBody = original.body;
-    const translatedBody = clone.body;
-    const sourceSignature = tagSignature(sourceBody, "HTML");
-    const translatedSignature = tagSignature(translatedBody, "HTML");
-
-    say("STEP 5 - FIDELITY CHECK on the HTML field");
-    say("");
-    say(`  BEFORE : ${sourceBody}`);
-    say(`  AFTER  : ${translatedBody}`);
-    say("");
-    say(`  tag multiset of BEFORE : ${JSON.stringify(sourceSignature)}`);
-    say(`  tag multiset of AFTER  : ${JSON.stringify(translatedSignature)}`);
-    say("");
-    say(`  Tag ORDER in the text differs - the translator moved <a> to the front of the Hindi`);
-    say(`  sentence. The check compares a SORTED multiset, so order is irrelevant; what matters`);
-    say(`  is that the same tags, and the same href, are all still present exactly once.`);
-    say("");
-    say(this.__check(fidelityPreserved(sourceBody, translatedBody, "HTML"), `fidelityPreserved() === true -> the translation was ACCEPTED`));
-    say(
-      this.__check(
-        !fidelityPreserved(sourceBody, "<p>ग्राहक पोर्टल के लिए नया लेआउट</p>", "HTML"),
-        `control: the same text WITHOUT the <a> would have been REJECTED`
-      )
-    );
-    say("");
-
-    // ---------------- STEP 6 ----------------
-    say("STEP 6 - REDUX STATE");
-    say("");
-    say(`  /translations.language                  : ${JSON.stringify(state.language)}`);
-    say(`  /translations.docs.posts.real-doc       :`);
-    say(this.__indent(JSON.stringify(clone, null, 2), 6));
-    say(`  /translations.status.posts.real-doc     :`);
-    say(this.__indent(JSON.stringify(docStatus, null, 2), 6));
-    say("");
-    say(this.__check(docStatus.status === Status.SUCCESS, `status === SUCCESS`));
-    say(this.__check(docStatus.failedFields.length === 0, `failedFields === [] (nothing failed)`));
-    say(this.__check(clone.status === undefined, `no translation metadata leaked into the document clone`));
-
-    this.__reportTranslatorScenario(
-      "R - STEP BY STEP against the REAL translation service (api.mymemory.translated.net)",
-      lines,
-      { fields, batches, httpRequests, clone, docStatus }
-    );
-  }
-
-  __indent(text, spaces) {
-    return text
-      .split("\n")
-      .map((line) => " ".repeat(spaces) + line)
-      .join("\n");
-  }
-
-  /**
-   * Fires one translate call at a URL you supply, using the real `setTranslator` URL form.
-   */
-  async __callRealEndpoint() {
-    if (!this._realEndpointUrl) {
-      alert("Please enter a translate endpoint URL.");
-      return;
-    }
-
-    const method = (this._realEndpointMethod || "GET").toUpperCase();
-    this._translatorOutput = `Calling ${method} ${this._realEndpointUrl} ...`;
-
-    let outcome;
-    try {
-      firestoreRedux.translation.setTranslator({ url: this._realEndpointUrl, method });
-      outcome = await firestoreRedux.translation._translator({
-        targetLanguage: "hi",
-        items: { "posts/real/title": { text: "Design the home page", contentType: "PLAIN" } },
-      });
-    } catch (error) {
-      outcome = `ERROR: ${error}`;
-    }
-
-    this.__reportTranslatorScenario(
-      `Real endpoint - ${method} ${this._realEndpointUrl}`,
-      [
-        `response: ${JSON.stringify(outcome, null, 2)}`,
-        `If this is a CORS or 404 error, the endpoint either isn't reachable from this origin or`,
-        `doesn't implement translate-api.openapi.yml - use the function form for it instead.`,
-      ],
-      { outcome }
-    );
-  }
-
-  /**
-   * Seeds a document locally and clears any translation it already had.
-   */
-  __prepareDoc(doc) {
-    this.__seedDoc("posts", doc);
-    store.dispatch(translationActions._removeDocTranslation("posts", doc.id));
-  }
-
-  /**
-   * Records every `fetch` the library makes, so "the function form makes no HTTP request" and
-   * "the URL form passes credentials: 'include'" are both directly observable.
-   * @returns {Object} `{ calls, restore }`
-   */
-  __spyFetch() {
-    const calls = [];
-    const original = window.fetch;
-    window.fetch = (url, init) => {
-      if (String(url).includes("/translate") && !String(url).includes("__")) {
-        calls.push({ url: String(url), init });
-      }
-      return original(url, init);
-    };
-    return { calls, restore: () => (window.fetch = original) };
-  }
-
-  /** @returns {Array} Everything the mock endpoint has received since the last reset. */
-  async __serverLog() {
-    const response = await fetch("/translate/__received");
-    return response.json();
-  }
-
-  async __resetServerLog() {
-    document.cookie = "demo_session=unit3; path=/";
-    await fetch("/translate/__reset");
-  }
-
-  __reportTranslatorScenario(title, lines, data) {
-    this._translatorOutput = [title, "", ...lines].join("\n");
-    console.group(`%c${title}`, "font-weight: bold");
-    lines.forEach((line) => console.log(line));
-    data && console.log(data);
-    console.groupEnd();
-  }
-
-  /**
-   * D1: only the field whose raw value changed is re-sent; its siblings keep the translations they
-   * already had, and a non-translatable change makes no translate call at all.
-   */
-  async _runFieldDiffScenario() {
-    const translateCalls = this._prepareActivationScenario([
-      ["posts", { id: "card", title: "Design home page", body: "Original body", views: 1 }],
-    ]);
-
-    firestoreRedux.translation.start({ id: "cards", filterFunction: () => true });
-    await this.__wait(300);
-    const afterFirstPass = cloneDeep(store.getState().translations.docs.posts.card);
-    const callsAfterFirstPass = translateCalls.length;
-
-    // Change ONE translatable field.
-    this.__seedDoc("posts", { id: "card", title: "Redesign home page", body: "Original body", views: 1 });
-    await this.__wait(DEBOUNCE_WINDOW / 2);
-    const midDebounce = cloneDeep(store.getState().translations.docs.posts.card);
-    const midDebounceStatus = cloneDeep(store.getState().translations.status.posts.card);
-    await this.__wait(DEBOUNCE_WINDOW + 400);
-
-    const afterTitleChange = cloneDeep(store.getState().translations.docs.posts.card);
-    const titleChangeCalls = translateCalls.slice(callsAfterFirstPass);
-    const callsBeforeNonTranslatable = translateCalls.length;
-
-    // Change a NON-translatable field.
-    this.__seedDoc("posts", { id: "card", title: "Redesign home page", body: "Original body", views: 99 });
-    await this.__wait(DEBOUNCE_WINDOW + 400);
-    const afterViewsChange = cloneDeep(store.getState().translations.docs.posts.card);
-
-    this._reportDocumentChangeScenario(
-      "D1 - a document update is diffed field by field",
-      [
-        `after first pass      : ${JSON.stringify(afterFirstPass)}`,
-        "",
-        `CHANGE title -> "Redesign home page"`,
-        `  mid-debounce clone  : ${JSON.stringify(midDebounce.title)}   status: ${midDebounceStatus.status}`,
-        `  after the window    : ${JSON.stringify(afterTitleChange.title)}`,
-        `  fields re-sent      : ${JSON.stringify(titleChangeCalls.map((call) => call.ids))}`,
-        this.__check(
-          titleChangeCalls.length === 1 && titleChangeCalls[0].ids.length === 1,
-          `exactly ONE field was re-sent, not the whole document`
-        ),
-        this.__check(
-          titleChangeCalls[0].ids[0].endsWith("/title"),
-          `and it was 'title' - the field that actually changed`
-        ),
-        this.__check(
-          afterTitleChange.body === afterFirstPass.body,
-          `'body' kept the translation it already had, untouched`
-        ),
-        this.__check(
-          midDebounce.title === afterFirstPass.title && midDebounceStatus.status === Status.SUCCESS,
-          `during the quiet window the clone still showed the PREVIOUS translation, status unchanged`
-        ),
-        "",
-        `CHANGE views -> 99  (not translatable)`,
-        `  translate calls     : ${callsBeforeNonTranslatable} before, ${translateCalls.length} after`,
-        `  clone.views         : ${JSON.stringify(afterViewsChange.views)}`,
-        this.__check(
-          translateCalls.length === callsBeforeNonTranslatable,
-          `no translate call was made for a non-translatable change`
-        ),
-        this.__check(afterViewsChange.views === 99, `the new value was copied straight into the clone`),
-        this.__check(
-          afterViewsChange.title === afterTitleChange.title && afterViewsChange.body === afterFirstPass.body,
-          `and no translated value changed`
-        ),
-      ],
-      { afterFirstPass, afterTitleChange, afterViewsChange, translateCalls }
-    );
-  }
-
-  /**
-   * D2: a field that failed under one language is retried fresh under the next - status is
-   * recomputed, not carried over.
-   */
-  async _runFailureThenLanguageChangeScenario() {
-    this._prepareActivationScenario([
-      ["posts", { id: "card", title: "Design home page", note: "Keep it simple" }],
-    ]);
-
-    // Fails 'note' under 'hi' only.
-    firestoreRedux.translation.setTranslator(async ({ targetLanguage, items }) => {
-      const translated = {};
-      Object.entries(items).forEach(([wireId, item]) => {
-        translated[wireId] =
-          targetLanguage === "hi" && wireId.endsWith("/note")
-            ? { text: item.text, success: false, error: "unsupported for this language" }
-            : { text: `[${targetLanguage}] ${item.text}`, success: true };
-      });
-      return { targetLanguage, items: translated };
-    });
-
-    firestoreRedux.translation.start({ id: "cards", filterFunction: () => true });
-    await this.__wait(400);
-    const underHindi = cloneDeep(store.getState().translations);
-
-    firestoreRedux.translation.setLanguage("gu");
-    await this.__wait(500);
-    const underGujarati = cloneDeep(store.getState().translations);
-
-    this._reportDocumentChangeScenario(
-      "D2 - a failure under one language is not assumed under the next",
-      [
-        `LANGUAGE 'hi'  (the Translator rejects 'note')`,
-        `  clone  : ${JSON.stringify(underHindi.docs.posts.card)}`,
-        `  status : ${JSON.stringify(underHindi.status.posts.card)}`,
-        this.__check(
-          underHindi.status.posts.card.status === Status.PARTIAL_FAILURE,
-          `PARTIAL_FAILURE - 'title' succeeded, 'note' failed`
-        ),
-        this.__check(
-          JSON.stringify(underHindi.status.posts.card.failedFields) === '["note"]',
-          `failedFields names exactly the failing field`
-        ),
-        this.__check(
-          underHindi.docs.posts.card.note === "Keep it simple",
-          `the failed field kept its source value, not null`
-        ),
-        "",
-        `setLanguage('gu')  (the Translator accepts everything)`,
-        `  clone  : ${JSON.stringify(underGujarati.docs.posts.card)}`,
-        `  status : ${JSON.stringify(underGujarati.status.posts.card)}`,
-        this.__check(
-          underGujarati.status.posts.card.status === Status.SUCCESS,
-          `status recomputed from scratch as SUCCESS - the old failure was not carried over`
-        ),
-        this.__check(
-          underGujarati.status.posts.card.failedFields.length === 0,
-          `failedFields cleared`
-        ),
-        this.__check(
-          underGujarati.docs.posts.card.note === "[gu] Keep it simple",
-          `the previously-failing field translated this time`
-        ),
-        this.__check(
-          underGujarati.docs.posts.card.title === "[gu] Design home page",
-          `and it re-translated from the ENGLISH original, not from the Hindi result`
-        ),
-      ],
-      { underHindi, underGujarati }
-    );
-  }
-
-  /**
-   * D3: one `setLanguage` call re-translates every activation's documents in a single pass.
-   */
-  async _runLanguageChangeAcrossActivationsScenario() {
-    const translateCalls = this._prepareActivationScenario([
-      ["posts", { id: "post-1", title: "Post one" }],
-      ["posts", { id: "shared", title: "Shared post" }],
-      ["comments", { id: "comment-1", text: "Comment one" }],
-      ["other", { id: "loose", title: "Matched by nobody" }],
-    ]);
-
-    firestoreRedux.translation.start({
-      id: "posts-feed",
-      filterFunction: (doc, collection) => collection === "posts",
-    });
-    firestoreRedux.translation.start({
-      id: "comments-feed",
-      filterFunction: (doc, collection) => collection === "comments",
-    });
-    firestoreRedux.translation.start({
-      id: "overlap",
-      filterFunction: (doc) => doc.id === "shared",
-    });
-    await this.__wait(500);
-
-    const beforeLanguageChange = this._translatedDocumentKeys();
-    translateCalls.length = 0;
-
-    firestoreRedux.translation.setLanguage("gu");
-    await this.__wait(600);
-
-    const { docs } = store.getState().translations;
-    const reSentWireIds = translateCalls.flatMap((call) => call.ids).sort();
-
-    this._reportDocumentChangeScenario(
-      "D3 - one setLanguage call, three activations, one pass",
-      [
-        `activations : posts-feed, comments-feed, overlap (overlap also matches posts/shared)`,
-        `translated before the change : ${JSON.stringify(beforeLanguageChange)}`,
-        "",
-        `setLanguage('gu')`,
-        `  wire ids re-sent : ${JSON.stringify(reSentWireIds)}`,
-        `  posts/post-1     : ${JSON.stringify(get(docs, ["posts", "post-1", "title"]))}`,
-        `  posts/shared     : ${JSON.stringify(get(docs, ["posts", "shared", "title"]))}`,
-        `  comments/comment-1: ${JSON.stringify(get(docs, ["comments", "comment-1", "text"]))}`,
-        `  other/loose      : ${JSON.stringify(get(docs, ["other", "loose"]))}`,
-        this.__check(
-          reSentWireIds.length === 3,
-          `three documents re-translated - the shared one exactly ONCE, not once per activation`
-        ),
-        this.__check(
-          translateCalls.every((call) => call.targetLanguage === "gu"),
-          `every call used the new language`
-        ),
-        this.__check(
-          String(get(docs, ["posts", "post-1", "title"])).startsWith("[gu]") &&
-            String(get(docs, ["comments", "comment-1", "text"])).startsWith("[gu]"),
-          `both activations' documents moved language, with no per-activation call`
-        ),
-        this.__check(
-          get(docs, ["other", "loose"]) === undefined,
-          `a document matched by no activation was unaffected`
-        ),
-      ],
-      { reSentWireIds, docs }
-    );
-  }
-
-  /**
-   * D4: a response for the previous language that arrives after the switch is discarded.
-   */
-  async _runStaleResponseScenario() {
-    this._prepareActivationScenario([["posts", { id: "card", title: "Design home page" }]]);
-
-    let releaseSlowResponse;
-    firestoreRedux.translation.setTranslator(async ({ targetLanguage, items }) => {
-      if (targetLanguage === "hi") {
-        await new Promise((resolve) => (releaseSlowResponse = resolve));
-      }
-      const translated = {};
-      Object.entries(items).forEach(([wireId, item]) => {
-        translated[wireId] = { text: `[${targetLanguage}] ${item.text}`, success: true };
-      });
-      return { targetLanguage, items: translated };
-    });
-
-    firestoreRedux.translation.start({ id: "cards", filterFunction: () => true });
-    await this.__wait(200);
-
-    firestoreRedux.translation.setLanguage("gu");
-    await this.__wait(400);
-    const afterSwitch = get(store.getState(), "translations.docs.posts.card.title");
-
-    releaseSlowResponse();
-    await this.__wait(500);
-    const afterStaleArrived = get(store.getState(), "translations.docs.posts.card.title");
-    const status = get(store.getState(), "translations.status.posts.card");
-
-    this._reportDocumentChangeScenario(
-      "D4 - a response for the old language, arriving late, is discarded",
-      [
-        `The 'hi' request is held open, then setLanguage('gu') runs and completes,`,
-        `then the held 'hi' response is released.`,
-        "",
-        `after switching to 'gu'        : ${JSON.stringify(afterSwitch)}`,
-        `after the late 'hi' response   : ${JSON.stringify(afterStaleArrived)}`,
-        `status                          : ${JSON.stringify(status)}`,
-        this.__check(String(afterSwitch).startsWith("[gu]"), `the new language was applied`),
-        this.__check(
-          afterStaleArrived === afterSwitch,
-          `the late response did NOT overwrite it with stale Hindi`
-        ),
-        this.__check(status.status === Status.SUCCESS, `and status stayed correct`),
-      ],
-      { afterSwitch, afterStaleArrived, status }
-    );
-  }
-
-  _reportDocumentChangeScenario(title, lines, data) {
-    this._documentChangeOutput = [title, "", ...lines].join("\n");
-    console.group(`%c${title}`, "font-weight: bold");
-    lines.forEach((line) => console.log(line));
-    data && console.log(data);
-    console.groupEnd();
-  }
-
-  /**
-   * Builds a click handler that refuses to start a scenario while another is still running.
-   * Scenarios each wipe the shared demo state up front and then await for seconds, so overlapping
-   * two of them makes the earlier one read state the later one already cleared.
-   * @param {Function} scenario The scenario method.
-   * @returns {Function} Click handler.
-   */
-  _scenarioClick(scenario) {
-    return () => this._runOneScenarioAtATime(scenario);
-  }
-
-  /**
-   * @param {Function} scenario The scenario method.
-   */
-  async _runOneScenarioAtATime(scenario) {
-    if (this._isScenarioRunning) {
-      return;
-    }
-
-    this._isScenarioRunning = true;
-    try {
-      await scenario.call(this);
-    } catch (error) {
-      console.error(error);
-      alert(`Scenario failed - see the console.\n\n${error}`);
-    } finally {
-      this._isScenarioRunning = false;
-    }
-  }
-
-  /**
-   * A1: a broad activation translates every match across every collection; a second, overlapping
-   * activation shares that one entry instead of duplicating or re-translating it.
-   */
-  async _runBroadStartScenario() {
-    const translateCalls = this._prepareActivationScenario([
-      ["posts", { id: "post-1", title: "Design the home page" }],
-      ["comments", { id: "comment-1", text: "Nice work" }],
-      ["boards", { id: "board-1", name: "Customer portal" }],
-    ]);
-
-    firestoreRedux.translation.start({ id: "everything", filterFunction: () => true });
-    await this.__wait(400);
-    const callsAfterFirstActivation = translateCalls.length;
-
-    firestoreRedux.translation.start({
-      id: "posts-only",
-      filterFunction: (doc, collection) => collection === "posts",
-    });
-    await this.__wait(400);
-
-    const { docs, activations } = store.getState().translations;
-    const index = firestoreRedux.translation._activations._index;
-
-    this._reportActivationScenario(
-      "A1 - a broad start, then an overlapping activation",
-      [
-        `start({ id: 'everything', filterFunction: () => true })`,
-        `translated documents : ${JSON.stringify(this._translatedDocumentKeys())}`,
-        `  posts/post-1       : ${JSON.stringify(get(docs, ["posts","post-1","title"]))}`,
-        `  comments/comment-1 : ${JSON.stringify(get(docs, ["comments","comment-1","text"]))}`,
-        `  boards/board-1     : ${JSON.stringify(get(docs, ["boards","board-1","name"]))}`,
-        this.__check(
-          !!docs.posts["post-1"] && !!docs.comments["comment-1"] && !!docs.boards["board-1"],
-          `every match across 3 collections was translated`
-        ),
-        "",
-        `start({ id: 'posts-only', filterFunction: collection === 'posts' })`,
-        `translate calls before : ${callsAfterFirstActivation}      after : ${translateCalls.length}`,
-        `index: everything -> ${JSON.stringify(index.documentKeys("everything").sort())}`,
-        `index: posts-only -> ${JSON.stringify(index.documentKeys("posts-only"))}`,
-        `index: posts/post-1 is matched by -> ${JSON.stringify(index.activationIds("posts/post-1").sort())}`,
-        this.__check(
-          translateCalls.length === callsAfterFirstActivation,
-          `the overlapping activation did NOT re-translate the shared document`
-        ),
-        this.__check(
-          Object.keys(docs.posts).length === 1,
-          `one shared docs entry for posts/post-1, not duplicated per activation`
-        ),
-        this.__check(
-          index.activationIds("posts/post-1").length === 2,
-          `both activations are indexed against that one document`
-        ),
-        this.__check(
-          Object.keys(activations).length === 2,
-          `both activations are stored in /translations.activations`
-        ),
-      ],
-      { docs, index: index.activationIds("posts/post-1") }
-    );
-  }
-
-  /**
-   * A2: narrowing an activation removes newly-excluded documents; widening it translates
-   * newly-included ones.
-   */
-  async _runScopeUpdateScenario() {
-    this._prepareActivationScenario([
-      ["posts", { id: "keep", title: "Keep me" }],
-      ["posts", { id: "drop", title: "Drop me" }],
-      ["posts", { id: "later", title: "Include me later" }],
-    ]);
-
-    firestoreRedux.translation.start({
-      id: "scoped",
-      filterFunction: (doc) => doc.id !== "later",
-    });
-    await this.__wait(400);
-    const afterStart = this._translatedDocumentKeys();
-
-    firestoreRedux.translation.update("scoped", { filterFunction: (doc) => doc.id === "keep" });
-    await this.__wait(300);
-    const afterNarrow = this._translatedDocumentKeys();
-    const keptTitle = get(store.getState(), "translations.docs.posts.keep.title");
-
-    firestoreRedux.translation.update("scoped", { filterFunction: () => true });
-    await this.__wait(400);
-    const afterWiden = this._translatedDocumentKeys();
-    const { docs } = store.getState().translations;
-
-    let rejectedUnknownId;
-    try {
-      firestoreRedux.translation.update("never-started", { filterFunction: () => true });
-      rejectedUnknownId = "NO ERROR THROWN";
-    } catch (error) {
-      rejectedUnknownId = String(error);
-    }
-
-    this._reportActivationScenario(
-      "A2 - update() narrows, then widens, an activation's scope",
-      [
-        `after start  (id !== 'later')  : ${JSON.stringify(afterStart)}`,
-        `after narrow (id === 'keep')   : ${JSON.stringify(afterNarrow)}`,
-        `after widen  (() => true)      : ${JSON.stringify(afterWiden)}`,
-        "",
-        this.__check(afterStart.length === 2, `start translated the 2 matching documents`),
-        this.__check(
-          afterNarrow.length === 1 && afterNarrow[0] === "posts/keep",
-          `narrowing removed 'drop' and kept 'keep'`
-        ),
-        this.__check(
-          keptTitle !== undefined && keptTitle === get(docs, "posts.keep.title"),
-          `the still-matching document was kept as-is, not re-translated`
-        ),
-        this.__check(
-          afterWiden.length === 3 && String(get(docs, "posts.later.title")).startsWith("[hi]"),
-          `widening translated the newly-included 'later'`
-        ),
-        "",
-        `update('never-started', ...) -> ${rejectedUnknownId}`,
-        this.__check(rejectedUnknownId !== "NO ERROR THROWN", `update on an unknown id is rejected`),
-      ],
-      { afterStart, afterNarrow, afterWiden }
-    );
-  }
-
-  /**
-   * A3: stopping one of two overlapping activations keeps the documents the other still matches.
-   */
-  async _runOverlappingStopScenario() {
-    this._prepareActivationScenario([
-      ["posts", { id: "shared", title: "Matched by both" }],
-      ["posts", { id: "exclusive", title: "Matched by broad only" }],
-    ]);
-
-    firestoreRedux.translation.start({ id: "broad", filterFunction: () => true });
-    firestoreRedux.translation.start({
-      id: "narrow",
-      filterFunction: (doc) => doc.id === "shared",
-    });
-    await this.__wait(500);
-    const beforeStop = this._translatedDocumentKeys();
-
-    firestoreRedux.translation.stop("broad");
-    await this.__wait(200);
-    const afterStoppingBroad = this._translatedDocumentKeys();
-    const { activations } = store.getState().translations;
-
-    firestoreRedux.translation.stop("narrow");
-    await this.__wait(200);
-    const afterStoppingBoth = this._translatedDocumentKeys();
-
-    this._reportActivationScenario(
-      "A3 - stop() one of two overlapping activations",
-      [
-        `'broad'  matches everything;  'narrow' matches only posts/shared`,
-        "",
-        `before stop            : ${JSON.stringify(beforeStop)}`,
-        `after stop('broad')    : ${JSON.stringify(afterStoppingBroad)}`,
-        `after stop('narrow')   : ${JSON.stringify(afterStoppingBoth)}`,
-        `activations left after stop('broad') : ${JSON.stringify(Object.keys(activations))}`,
-        "",
-        this.__check(beforeStop.length === 2, `both documents translated while both activations ran`),
-        this.__check(
-          afterStoppingBroad.length === 1 && afterStoppingBroad[0] === "posts/shared",
-          `posts/shared KEPT - 'narrow' still matches it`
-        ),
-        this.__check(
-          !afterStoppingBroad.includes("posts/exclusive"),
-          `posts/exclusive removed - only the stopped activation matched it`
-        ),
-        this.__check(
-          Object.keys(activations).length === 1 && activations.narrow,
-          `only 'narrow' remains in /translations.activations`
-        ),
-        this.__check(
-          afterStoppingBoth.length === 0,
-          `stopping the last activation clears the remaining document too`
-        ),
-      ],
-      { beforeStop, afterStoppingBroad, afterStoppingBoth }
-    );
-  }
-
-  /**
-   * A4: a live activation picks up documents retrieved after it started, ignores non-matching
-   * arrivals, and reacts when an update changes whether a document matches at all.
-   */
-  async _runLateArrivalScenario() {
-    this._prepareActivationScenario([]);
-
-    firestoreRedux.translation.start({
-      id: "live",
-      filterFunction: (doc, collection) => collection === "posts" && doc.stage === "PUBLISHED",
-    });
-    await this.__wait(200);
-    const atStart = this._translatedDocumentKeys();
-
-    this.__seedDoc("posts", { id: "arrival", title: "Arrived after start", stage: "PUBLISHED" });
-    await this.__wait(400);
-    const afterMatchingArrival = this._translatedDocumentKeys();
-    const arrivalTitle = get(store.getState(), "translations.docs.posts.arrival.title");
-
-    this.__seedDoc("comments", { id: "ignored", text: "Wrong collection" });
-    await this.__wait(300);
-    const afterNonMatchingArrival = this._translatedDocumentKeys();
-
-    this.__seedDoc("posts", { id: "arrival", title: "Arrived after start", stage: "ARCHIVED" });
-    await this.__wait(300);
-    const afterLeavingScope = this._translatedDocumentKeys();
-
-    this._reportActivationScenario(
-      "A4 - documents retrieved after start(), and membership changing later",
-      [
-        `activation 'live' matches: collection === 'posts' && doc.stage === 'PUBLISHED'`,
-        "",
-        `at start (nothing loaded)              : ${JSON.stringify(atStart)}`,
-        `after a matching document arrives      : ${JSON.stringify(afterMatchingArrival)}`,
-        `   its stored title                    : ${JSON.stringify(arrivalTitle)}`,
-        `after a NON-matching document arrives  : ${JSON.stringify(afterNonMatchingArrival)}`,
-        `after its stage changes to ARCHIVED    : ${JSON.stringify(afterLeavingScope)}`,
-        "",
-        this.__check(atStart.length === 0, `nothing to translate at start - no documents loaded yet`),
-        this.__check(
-          afterMatchingArrival.includes("posts/arrival") && String(arrivalTitle).startsWith("[hi]"),
-          `a document retrieved AFTER start was translated, with no second start() call`
-        ),
-        this.__check(
-          !afterNonMatchingArrival.includes("comments/ignored"),
-          `a non-matching arrival was ignored`
-        ),
-        this.__check(
-          afterLeavingScope.length === 0,
-          `once it stopped matching, it left the translated set`
-        ),
-      ],
-      { afterMatchingArrival, afterLeavingScope }
-    );
-  }
-
-  /**
-   * Clears every activation and translated document, seeds fresh documents, and installs a fast
-   * recording Translator.
-   * @param {Array} collectionsAndDocs e.g. `[['posts', { id, title }], ...]`
-   * @returns {Array} Recorded translate calls.
-   */
-  _prepareActivationScenario(collectionsAndDocs) {
-    Object.keys(store.getState().translations.activations).forEach((activationId) => {
-      firestoreRedux.translation.stop(activationId);
-      // The state-shape scenarios write activations straight into redux to demonstrate the shape,
-      // bypassing start() - so stop() doesn't recognise them and leaves them behind. Clear whatever
-      // survived, or a later scenario counts activations it never created.
-      store.dispatch(translationActions._removeActivation(activationId));
-    });
-
-    const { docs } = store.getState().translations;
-    forEach(docs, (documents, collection) => {
-      forEach(documents, (document, docId) =>
-        store.dispatch(translationActions._removeDocTranslation(collection, docId))
-      );
-    });
-
-    forEach(get(store.getState(), "firestore.docs"), (documents, collection) => {
-      const docIds = Object.keys(documents);
-      if (docIds.length) {
-        store.dispatch(
-          firestoreRedux.actions.deleteDocs(collection, docIds, {
-            localWrite: true,
-            remoteWrite: false,
-          })
-        );
-      }
-    });
-
-    const translateCalls = this.__installStubTranslator({ latency: 0 });
-    firestoreRedux.translation.setSchema({});
-    firestoreRedux.translation.setLanguage("hi");
-    collectionsAndDocs.forEach(([collection, document]) => this.__seedDoc(collection, document));
-    return translateCalls;
-  }
-
-  /** @returns {Array} `collection/docId` of every document currently in `/translations.docs`. */
-  _translatedDocumentKeys() {
-    const keys = [];
-    forEach(store.getState().translations.docs, (documents, collection) => {
-      forEach(documents, (document, docId) => keys.push(`${collection}/${docId}`));
-    });
-    return keys.sort();
-  }
-
-  _reportActivationScenario(title, lines, data) {
-    this._activationOutput = [title, "", ...lines].join("\n");
-    console.group(`%c${title}`, "font-weight: bold");
-    lines.forEach((line) => console.log(line));
-    data && console.log(data);
-    console.groupEnd();
-  }
-
-  /**
-   * Installs a stub Translator and returns the array its calls are recorded into. Stands in for
-   * `translation.setTranslator`, which arrives in the next unit.
-   * @param {Object} param0
-   *  @property {Number} latency Milliseconds each call takes to resolve.
-   *  @property {Function} mangle `(wireId, item, targetLanguage) => { text, success }`. Defaults to
-   *   prefixing the language, which leaves any tags intact.
-   * @returns {Array} Recorded calls.
-   */
-  __installStubTranslator({ latency = 0, mangle } = {}) {
-    const calls = [];
-    let inFlight = 0;
-
-    firestoreRedux.translation._translator = async ({ targetLanguage, items }) => {
-      inFlight++;
-      const ids = Object.keys(items);
-      const call = {
-        targetLanguage,
-        ids,
-        count: ids.length,
-        chars: Object.values(items).reduce((total, item) => total + item.text.length, 0),
-        concurrentAtStart: inFlight,
-        startedAt: Date.now(),
-      };
-      calls.push(call);
-
-      if (latency) {
-        await this.__wait(latency);
-      }
-
-      inFlight--;
-      call.finishedAt = Date.now();
-
-      const translated = {};
-      Object.entries(items).forEach(([id, item]) => {
-        translated[id] = mangle
-          ? mangle(id, item, targetLanguage)
-          : { text: `[${targetLanguage}] ${item.text}`, success: true };
-      });
-      return { targetLanguage, items: translated };
-    };
-
-    return calls;
-  }
-
-  /**
-   * Writes a document into `firestore.docs` locally, so the pipeline has an original to clone.
-   */
-  __seedDoc(collection, doc) {
-    store.dispatch(
-      firestoreRedux.actions.save(collection, [doc], { localWrite: true, remoteWrite: false })
-    );
-  }
-
-  __translate(collection, docId, fields, debounce) {
-    firestoreRedux.translation._translateDocument({ collection, docId, fields, debounce });
-  }
-
-  __wait(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  __reportPipelineScenario(title, lines, data) {
-    this._pipelineOutput = [title, "", ...lines].join("\n");
-    console.group(`%c${title}`, "font-weight: bold");
-    lines.forEach((line) => console.log(line));
-    data && console.log(data);
-    console.groupEnd();
-  }
-
-  __setTranslationSchema() {
-    if (!this.__isJSONString(this._translationSchemaString)) {
-      alert("Please enter a valid JSON schema.");
-      return;
-    }
-
-    try {
-      firestoreRedux.translation.setSchema(
-        JSON.parse(this._translationSchemaString)
-      );
-      this.__reportTranslationScenario("translation.setSchema", [
-        this.__check(true, "schema accepted and stored at /translations.schema"),
-      ]);
-    } catch (error) {
-      console.error(error);
-      this.__reportTranslationScenario("translation.setSchema", [
-        this.__check(false, `${error}`),
-      ]);
-    }
-  }
-
-  __resetTranslationState() {
-    firestoreRedux.translation.setSchema({});
-    store.dispatch(translationActions.setLanguage(undefined));
-    store.dispatch(translationActions._removeActivation("posts-feed"));
-    store.dispatch(translationActions._removeActivation("comments-feed"));
-    store.dispatch(
-      translationActions._removeDocTranslation("posts", "post_123")
-    );
-    this._translationOutput = "Reset. /translations is back to its initial shape.";
-  }
-
-  /**
-   * Prints a scenario's outcome to both the demo card and the console.
-   * @param {String} title Scenario title.
-   * @param {Array} lines Lines to show, in order.
-   * @param {Object} data Raw values, logged to the console for inspection.
-   */
-  __reportTranslationScenario(title, lines, data) {
-    this._translationOutput = [title, "", ...lines].join("\n");
-    console.group(`%c${title}`, "font-weight: bold");
-    lines.forEach((line) => console.log(line));
-    data && console.log(data);
-    console.groupEnd();
-  }
-
-  /**
-   * @param {Boolean} passed Whether the expectation held.
-   * @param {String} expectation What was expected.
-   * @returns {String} A single result line.
-   */
-  __check(passed, expectation) {
-    return `${passed ? "PASS" : "FAIL"}  ${expectation}`;
-  }
-
-  /**
-   * @param {Object} value Value to show.
-   * @returns {String} Pretty JSON, with functions shown by name since JSON drops them.
-   */
-  __stringify(value) {
-    if (value === undefined) {
-      return "";
-    }
-
-    return JSON.stringify(
-      value,
-      (key, val) => (typeof val === "function" ? "<filterFunction>" : val),
-      2
-    );
+    this._translationRows = rows;
   }
 
   /**
@@ -2683,7 +862,9 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
   }
 
   stateChanged(state) {
-    this._translationState = state.translations;
+    if (this._translationRows.length) {
+      this._refreshTranslationRows();
+    }
   }
 }
 customElements.define("firestore-redux-demo", FirestoreReduxDemo);

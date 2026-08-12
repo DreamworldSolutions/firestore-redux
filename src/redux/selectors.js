@@ -5,26 +5,65 @@ import forEach from "lodash-es/forEach.js";
 import uniq from "lodash-es/uniq.js";
 import { createSelector } from 'reselect';
 import isEqual from "lodash-es/isEqual.js";
+import isEmpty from "lodash-es/isEmpty.js";
+
+/**
+ * Swaps in each document's translation where one exists. A flat per-document swap, never a
+ * per-field merge - the merge already happened once, when the translation landed.
+ * @param {Object} originalDocs Documents of one collection, as stored.
+ * @param {Object} translatedDocs Translated clones of that same collection, if any.
+ * @returns {Object} Documents to read.
+ * @private
+ */
+const readThroughCollection = (originalDocs, translatedDocs) => {
+  if (!originalDocs || isEmpty(translatedDocs)) {
+    return originalDocs;
+  }
+
+  const docs = { ...originalDocs };
+  forEach(translatedDocs, (translatedDoc, docId) => {
+    // Only where the document itself is still loaded - a translation never resurrects one.
+    if (docs[docId] !== undefined) {
+      docs[docId] = translatedDoc;
+    }
+  });
+  return docs;
+};
 
 /**
  * @param {Object} state Redux State.
  * @param {String} collection Collection Id
  * @param {String} docId Document Id
- * @returns {Object} Document for given document Id from the given collection with it's local value.
+ * @returns {Object} Document for given document Id from the given collection with it's local value -
+ *  its translation in the current language once that is available, the original otherwise. See
+ *  wiki/translation/selectors-reference.md.
  */
 export const doc = (state, collection, docId) =>
+  get(state, `translations.docs.${collection}.${docId}`) ||
+  get(state, `firestore.docs.${collection}.${docId}`);
+
+/**
+ * @param {Object} state Redux State.
+ * @param {String} collection Collection Id
+ * @param {String} docId Document Id
+ * @returns {Object} The document exactly as stored, in the language it was authored in - never the
+ *  translated clone. Use this wherever the source content is what matters, e.g. populating an editor,
+ *  so that saving can't write a translation back over the original.
+ */
+export const originalDoc = (state, collection, docId) =>
   get(state, `firestore.docs.${collection}.${docId}`);
 
 /**
  * @param0
  *  @property {Object} state Redux state.
  *  @property {collection} collection Collection / Subcollection ID.
- * @returns {Array} All documents of given collection Id.
+ * @returns {Array} All documents of given collection Id, translated where available.
  */
 export const allDocs = createSelector(
   (state, collection) => get(state, `firestore.docs.${collection}`),
-  (docs) => {
-    return values(docs);
+  (state, collection) => get(state, `translations.docs.${collection}`),
+  (originalDocs, translatedDocs) => {
+    return values(readThroughCollection(originalDocs, translatedDocs));
   },
   { maxSize: 500, resultEqualityCheck: isEqual }
 );
@@ -32,10 +71,14 @@ export const allDocs = createSelector(
 /**
  * @param {Object} state Redux state
  * @param {String} collection Collection / Subcollection ID.
- * @returns {Object} Hash of whole collection.
+ * @returns {Object} Hash of whole collection, translated where available.
  */
-export const collection = (state, collection) =>
-  get(state, `firestore.docs.${collection}`);
+export const collection = createSelector(
+  (state, collection) => get(state, `firestore.docs.${collection}`),
+  (state, collection) => get(state, `translations.docs.${collection}`),
+  (originalDocs, translatedDocs) => readThroughCollection(originalDocs, translatedDocs),
+  { maxSize: 500, resultEqualityCheck: isEqual }
+);
 
 
 /**
@@ -97,12 +140,16 @@ export const docsByQuery = createSelector(
   (state, queryId) => get(state, `firestore.queries.${queryId}.collection`),
   queryResult,
   (state, queryId) => get(state, `firestore.docs`),
-  (queryCollection, queryResult, allDocs) => {
+  (state, queryId) => get(state, `translations.docs`),
+  (queryCollection, queryResult, allDocs, allTranslatedDocs) => {
     if(!queryCollection) {
       return [];
     }
 
-    allDocs = get(allDocs, queryCollection);
+    allDocs = readThroughCollection(
+      get(allDocs, queryCollection),
+      get(allTranslatedDocs, queryCollection)
+    );
     let docs = [];
     forEach(queryResult, (docId) => {
       allDocs && docs.push(allDocs[docId]);
@@ -122,7 +169,9 @@ export const docsByQuery = createSelector(
 export const docsByQueryResult = createSelector(
   queryResult,
   (state, queryId, collection) => get(state, `firestore.docs.${collection}`),
-  (result, allDocs) => {
+  (state, queryId, collection) => get(state, `translations.docs.${collection}`),
+  (result, allDocs, translatedDocs) => {
+    allDocs = readThroughCollection(allDocs, translatedDocs);
     let docs = [];
     forEach(result, (docId) => {
       allDocs && allDocs[docId] && docs.push(allDocs[docId]);

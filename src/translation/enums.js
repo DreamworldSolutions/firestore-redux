@@ -21,3 +21,10 @@ export const Status = {
   PARTIAL_FAILURE: "PARTIAL_FAILURE",
   FAILED: "FAILED",
 };
+
+/**
+ * What the `translation.status` selector reports for a document translation hasn't reached yet.
+ * Deliberately not a member of `Status` above: it is never written to state - it is what "no entry"
+ * reads as, so callers never have to handle `undefined`.
+ */
+export const PENDING = "PENDING";
