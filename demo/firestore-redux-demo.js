@@ -1,6 +1,8 @@
 import { LitElement, html, css, unsafeCSS } from '@dreamworld/pwa-helpers/lit.js';
 import { connect } from "@dreamworld/pwa-helpers/connect-mixin";
 import cloneDeep from "lodash-es/cloneDeep";
+import forEach from "lodash-es/forEach";
+import get from "lodash-es/get";
 import { store } from "./store";
 import firestoreRedux from "../src/firestore-redux";
 import * as translationActions from "../src/translation/redux/actions.js";
@@ -184,6 +186,17 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
      * Human readable result of the last setTranslator / setLanguage scenario that was run.
      */
     _translatorOutput: { type: String },
+
+    /**
+     * Human readable result of the last activation-lifecycle scenario that was run.
+     */
+    _activationOutput: { type: String },
+
+    /**
+     * `true` while a scenario is running. Every scenario starts by wiping the shared demo state, so
+     * running two at once lets the second one pull state out from under the first.
+     */
+    _isScenarioRunning: { type: Boolean },
   };
 
   constructor() {
@@ -207,6 +220,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     this._translationOutput = "Run a scenario to see its result here (and in the console).";
     this._pipelineOutput = "Run a scenario to see its result here (and in the console).";
     this._translatorOutput = "Run a scenario to see its result here (and in the console).";
+    this._activationOutput = "Run a scenario to see its result here (and in the console).";
     this._realEndpointUrl = "";
     this._realEndpointMethod = "GET";
     this._translationSchemaString = `{
@@ -232,9 +246,37 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
 
     return html`
       ${this._translationTemplate} ${this._pipelineTemplate}
-      ${this._translatorTemplate} ${this._readByQueryTemplate}
-      ${this._readByDocTemplate} ${this._cancelQueryTemplate}
-      ${this._saveDeleteTemplate}
+      ${this._translatorTemplate} ${this._activationTemplate}
+      ${this._readByQueryTemplate} ${this._readByDocTemplate}
+      ${this._cancelQueryTemplate} ${this._saveDeleteTemplate}
+    `;
+  }
+
+  get _activationTemplate() {
+    return html`
+      <div class="request-query_container card">
+        <h6 class="headline6">
+          Translation &mdash; activation lifecycle
+          (<code>start</code> / <code>update</code> / <code>stop</code>)
+        </h6>
+        <div class="translation-actions">
+          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this._runBroadStartScenario)}
+            >A1. Broad start &amp; overlap</dw-button
+          >
+          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this._runScopeUpdateScenario)}
+            >A2. Narrow &amp; widen scope</dw-button
+          >
+          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this._runOverlappingStopScenario)}
+            >A3. Stop one of two</dw-button
+          >
+          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this._runLateArrivalScenario)}
+            >A4. Documents arriving later</dw-button
+          >
+        </div>
+
+        <h6 class="headline6">Result</h6>
+        <pre class="output">${this._activationOutput}</pre>
+      </div>
     `;
   }
 
@@ -253,19 +295,19 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
           received, not just what the client thinks it sent.
         </div>
         <div class="translation-actions">
-          <dw-button raised @click=${this.__runTranslatorScenario1}
+          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runTranslatorScenario1)}
             >T1. Plain URL &rarr; GET</dw-button
           >
-          <dw-button raised @click=${this.__runTranslatorScenario2}
+          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runTranslatorScenario2)}
             >T2. POST &amp; default GET</dw-button
           >
-          <dw-button raised @click=${this.__runTranslatorScenario3}
+          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runTranslatorScenario3)}
             >T3. Function form</dw-button
           >
-          <dw-button raised @click=${this.__runTranslatorScenario4}
+          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runTranslatorScenario4)}
             >T4. No language yet</dw-button
           >
-          <dw-button raised @click=${this.__runRealApiScenario}
+          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runRealApiScenario)}
             >R. REAL public API (~8s)</dw-button
           >
         </div>
@@ -293,7 +335,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
             }}
           ></dw-input>
         </div>
-        <dw-button raised @click=${this.__callRealEndpoint}
+        <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__callRealEndpoint)}
           >Call real endpoint</dw-button
         >
       </div>
@@ -311,16 +353,16 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
           <code>MAX_CONCURRENT_REQUESTS=${MAX_CONCURRENT_REQUESTS}</code>
         </div>
         <div class="translation-actions">
-          <dw-button raised @click=${this.__runPipelineScenario1}
+          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runPipelineScenario1)}
             >P1. Wire addressing</dw-button
           >
-          <dw-button raised @click=${this.__runPipelineScenario2}
+          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runPipelineScenario2)}
             >P2. Debouncing (~3s)</dw-button
           >
-          <dw-button raised @click=${this.__runPipelineScenario3}
+          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runPipelineScenario3)}
             >P3. Chunking &amp; concurrency (~3s)</dw-button
           >
-          <dw-button raised @click=${this.__runPipelineScenario4}
+          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runPipelineScenario4)}
             >P4. Fidelity</dw-button
           >
         </div>
@@ -339,19 +381,19 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
           <code>setSchema</code>
         </h6>
         <div class="translation-actions">
-          <dw-button raised @click=${this.__runTranslationScenario1}
+          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runTranslationScenario1)}
             >1. Shared language</dw-button
           >
-          <dw-button raised @click=${this.__runTranslationScenario2}
+          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runTranslationScenario2)}
             >2. Own "status" field</dw-button
           >
-          <dw-button raised @click=${this.__runTranslationScenario3}
+          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runTranslationScenario3)}
             >3. '*' + doc override</dw-button
           >
-          <dw-button raised @click=${this.__runTranslationScenario4}
+          <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__runTranslationScenario4)}
             >4. Default skips &amp; contentType</dw-button
           >
-          <dw-button outlined @click=${this.__resetTranslationState}
+          <dw-button outlined ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__resetTranslationState)}
             >Reset</dw-button
           >
         </div>
@@ -370,7 +412,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
             this._translationSchemaString = e.detail.value;
           }}
         ></dw-textarea>
-        <dw-button raised @click=${this.__setTranslationSchema}
+        <dw-button raised ?disabled=${this._isScenarioRunning} @click=${this._scenarioClick(this.__setTranslationSchema)}
           >Set Schema</dw-button
         >
 
@@ -1826,6 +1868,331 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
 
   __reportTranslatorScenario(title, lines, data) {
     this._translatorOutput = [title, "", ...lines].join("\n");
+    console.group(`%c${title}`, "font-weight: bold");
+    lines.forEach((line) => console.log(line));
+    data && console.log(data);
+    console.groupEnd();
+  }
+
+  /**
+   * Builds a click handler that refuses to start a scenario while another is still running.
+   * Scenarios each wipe the shared demo state up front and then await for seconds, so overlapping
+   * two of them makes the earlier one read state the later one already cleared.
+   * @param {Function} scenario The scenario method.
+   * @returns {Function} Click handler.
+   */
+  _scenarioClick(scenario) {
+    return () => this._runOneScenarioAtATime(scenario);
+  }
+
+  /**
+   * @param {Function} scenario The scenario method.
+   */
+  async _runOneScenarioAtATime(scenario) {
+    if (this._isScenarioRunning) {
+      return;
+    }
+
+    this._isScenarioRunning = true;
+    try {
+      await scenario.call(this);
+    } catch (error) {
+      console.error(error);
+      alert(`Scenario failed - see the console.\n\n${error}`);
+    } finally {
+      this._isScenarioRunning = false;
+    }
+  }
+
+  /**
+   * A1: a broad activation translates every match across every collection; a second, overlapping
+   * activation shares that one entry instead of duplicating or re-translating it.
+   */
+  async _runBroadStartScenario() {
+    const translateCalls = this._prepareActivationScenario([
+      ["posts", { id: "post-1", title: "Design the home page" }],
+      ["comments", { id: "comment-1", text: "Nice work" }],
+      ["boards", { id: "board-1", name: "Customer portal" }],
+    ]);
+
+    firestoreRedux.translation.start({ id: "everything", filterFunction: () => true });
+    await this.__wait(400);
+    const callsAfterFirstActivation = translateCalls.length;
+
+    firestoreRedux.translation.start({
+      id: "posts-only",
+      filterFunction: (doc, collection) => collection === "posts",
+    });
+    await this.__wait(400);
+
+    const { docs, activations } = store.getState().translations;
+    const index = firestoreRedux.translation._activations._index;
+
+    this._reportActivationScenario(
+      "A1 - a broad start, then an overlapping activation",
+      [
+        `start({ id: 'everything', filterFunction: () => true })`,
+        `translated documents : ${JSON.stringify(this._translatedDocumentKeys())}`,
+        `  posts/post-1       : ${JSON.stringify(get(docs, ["posts","post-1","title"]))}`,
+        `  comments/comment-1 : ${JSON.stringify(get(docs, ["comments","comment-1","text"]))}`,
+        `  boards/board-1     : ${JSON.stringify(get(docs, ["boards","board-1","name"]))}`,
+        this.__check(
+          !!docs.posts["post-1"] && !!docs.comments["comment-1"] && !!docs.boards["board-1"],
+          `every match across 3 collections was translated`
+        ),
+        "",
+        `start({ id: 'posts-only', filterFunction: collection === 'posts' })`,
+        `translate calls before : ${callsAfterFirstActivation}      after : ${translateCalls.length}`,
+        `index: everything -> ${JSON.stringify(index.documentKeys("everything").sort())}`,
+        `index: posts-only -> ${JSON.stringify(index.documentKeys("posts-only"))}`,
+        `index: posts/post-1 is matched by -> ${JSON.stringify(index.activationIds("posts/post-1").sort())}`,
+        this.__check(
+          translateCalls.length === callsAfterFirstActivation,
+          `the overlapping activation did NOT re-translate the shared document`
+        ),
+        this.__check(
+          Object.keys(docs.posts).length === 1,
+          `one shared docs entry for posts/post-1, not duplicated per activation`
+        ),
+        this.__check(
+          index.activationIds("posts/post-1").length === 2,
+          `both activations are indexed against that one document`
+        ),
+        this.__check(
+          Object.keys(activations).length === 2,
+          `both activations are stored in /translations.activations`
+        ),
+      ],
+      { docs, index: index.activationIds("posts/post-1") }
+    );
+  }
+
+  /**
+   * A2: narrowing an activation removes newly-excluded documents; widening it translates
+   * newly-included ones.
+   */
+  async _runScopeUpdateScenario() {
+    this._prepareActivationScenario([
+      ["posts", { id: "keep", title: "Keep me" }],
+      ["posts", { id: "drop", title: "Drop me" }],
+      ["posts", { id: "later", title: "Include me later" }],
+    ]);
+
+    firestoreRedux.translation.start({
+      id: "scoped",
+      filterFunction: (doc) => doc.id !== "later",
+    });
+    await this.__wait(400);
+    const afterStart = this._translatedDocumentKeys();
+
+    firestoreRedux.translation.update("scoped", { filterFunction: (doc) => doc.id === "keep" });
+    await this.__wait(300);
+    const afterNarrow = this._translatedDocumentKeys();
+    const keptTitle = get(store.getState(), "translations.docs.posts.keep.title");
+
+    firestoreRedux.translation.update("scoped", { filterFunction: () => true });
+    await this.__wait(400);
+    const afterWiden = this._translatedDocumentKeys();
+    const { docs } = store.getState().translations;
+
+    let rejectedUnknownId;
+    try {
+      firestoreRedux.translation.update("never-started", { filterFunction: () => true });
+      rejectedUnknownId = "NO ERROR THROWN";
+    } catch (error) {
+      rejectedUnknownId = String(error);
+    }
+
+    this._reportActivationScenario(
+      "A2 - update() narrows, then widens, an activation's scope",
+      [
+        `after start  (id !== 'later')  : ${JSON.stringify(afterStart)}`,
+        `after narrow (id === 'keep')   : ${JSON.stringify(afterNarrow)}`,
+        `after widen  (() => true)      : ${JSON.stringify(afterWiden)}`,
+        "",
+        this.__check(afterStart.length === 2, `start translated the 2 matching documents`),
+        this.__check(
+          afterNarrow.length === 1 && afterNarrow[0] === "posts/keep",
+          `narrowing removed 'drop' and kept 'keep'`
+        ),
+        this.__check(
+          keptTitle !== undefined && keptTitle === get(docs, "posts.keep.title"),
+          `the still-matching document was kept as-is, not re-translated`
+        ),
+        this.__check(
+          afterWiden.length === 3 && String(get(docs, "posts.later.title")).startsWith("[hi]"),
+          `widening translated the newly-included 'later'`
+        ),
+        "",
+        `update('never-started', ...) -> ${rejectedUnknownId}`,
+        this.__check(rejectedUnknownId !== "NO ERROR THROWN", `update on an unknown id is rejected`),
+      ],
+      { afterStart, afterNarrow, afterWiden }
+    );
+  }
+
+  /**
+   * A3: stopping one of two overlapping activations keeps the documents the other still matches.
+   */
+  async _runOverlappingStopScenario() {
+    this._prepareActivationScenario([
+      ["posts", { id: "shared", title: "Matched by both" }],
+      ["posts", { id: "exclusive", title: "Matched by broad only" }],
+    ]);
+
+    firestoreRedux.translation.start({ id: "broad", filterFunction: () => true });
+    firestoreRedux.translation.start({
+      id: "narrow",
+      filterFunction: (doc) => doc.id === "shared",
+    });
+    await this.__wait(500);
+    const beforeStop = this._translatedDocumentKeys();
+
+    firestoreRedux.translation.stop("broad");
+    await this.__wait(200);
+    const afterStoppingBroad = this._translatedDocumentKeys();
+    const { activations } = store.getState().translations;
+
+    firestoreRedux.translation.stop("narrow");
+    await this.__wait(200);
+    const afterStoppingBoth = this._translatedDocumentKeys();
+
+    this._reportActivationScenario(
+      "A3 - stop() one of two overlapping activations",
+      [
+        `'broad'  matches everything;  'narrow' matches only posts/shared`,
+        "",
+        `before stop            : ${JSON.stringify(beforeStop)}`,
+        `after stop('broad')    : ${JSON.stringify(afterStoppingBroad)}`,
+        `after stop('narrow')   : ${JSON.stringify(afterStoppingBoth)}`,
+        `activations left after stop('broad') : ${JSON.stringify(Object.keys(activations))}`,
+        "",
+        this.__check(beforeStop.length === 2, `both documents translated while both activations ran`),
+        this.__check(
+          afterStoppingBroad.length === 1 && afterStoppingBroad[0] === "posts/shared",
+          `posts/shared KEPT - 'narrow' still matches it`
+        ),
+        this.__check(
+          !afterStoppingBroad.includes("posts/exclusive"),
+          `posts/exclusive removed - only the stopped activation matched it`
+        ),
+        this.__check(
+          Object.keys(activations).length === 1 && activations.narrow,
+          `only 'narrow' remains in /translations.activations`
+        ),
+        this.__check(
+          afterStoppingBoth.length === 0,
+          `stopping the last activation clears the remaining document too`
+        ),
+      ],
+      { beforeStop, afterStoppingBroad, afterStoppingBoth }
+    );
+  }
+
+  /**
+   * A4: a live activation picks up documents retrieved after it started, ignores non-matching
+   * arrivals, and reacts when an update changes whether a document matches at all.
+   */
+  async _runLateArrivalScenario() {
+    this._prepareActivationScenario([]);
+
+    firestoreRedux.translation.start({
+      id: "live",
+      filterFunction: (doc, collection) => collection === "posts" && doc.stage === "PUBLISHED",
+    });
+    await this.__wait(200);
+    const atStart = this._translatedDocumentKeys();
+
+    this.__seedDoc("posts", { id: "arrival", title: "Arrived after start", stage: "PUBLISHED" });
+    await this.__wait(400);
+    const afterMatchingArrival = this._translatedDocumentKeys();
+    const arrivalTitle = get(store.getState(), "translations.docs.posts.arrival.title");
+
+    this.__seedDoc("comments", { id: "ignored", text: "Wrong collection" });
+    await this.__wait(300);
+    const afterNonMatchingArrival = this._translatedDocumentKeys();
+
+    this.__seedDoc("posts", { id: "arrival", title: "Arrived after start", stage: "ARCHIVED" });
+    await this.__wait(300);
+    const afterLeavingScope = this._translatedDocumentKeys();
+
+    this._reportActivationScenario(
+      "A4 - documents retrieved after start(), and membership changing later",
+      [
+        `activation 'live' matches: collection === 'posts' && doc.stage === 'PUBLISHED'`,
+        "",
+        `at start (nothing loaded)              : ${JSON.stringify(atStart)}`,
+        `after a matching document arrives      : ${JSON.stringify(afterMatchingArrival)}`,
+        `   its stored title                    : ${JSON.stringify(arrivalTitle)}`,
+        `after a NON-matching document arrives  : ${JSON.stringify(afterNonMatchingArrival)}`,
+        `after its stage changes to ARCHIVED    : ${JSON.stringify(afterLeavingScope)}`,
+        "",
+        this.__check(atStart.length === 0, `nothing to translate at start - no documents loaded yet`),
+        this.__check(
+          afterMatchingArrival.includes("posts/arrival") && String(arrivalTitle).startsWith("[hi]"),
+          `a document retrieved AFTER start was translated, with no second start() call`
+        ),
+        this.__check(
+          !afterNonMatchingArrival.includes("comments/ignored"),
+          `a non-matching arrival was ignored`
+        ),
+        this.__check(
+          afterLeavingScope.length === 0,
+          `once it stopped matching, it left the translated set`
+        ),
+      ],
+      { afterMatchingArrival, afterLeavingScope }
+    );
+  }
+
+  /**
+   * Clears every activation and translated document, seeds fresh documents, and installs a fast
+   * recording Translator.
+   * @param {Array} collectionsAndDocs e.g. `[['posts', { id, title }], ...]`
+   * @returns {Array} Recorded translate calls.
+   */
+  _prepareActivationScenario(collectionsAndDocs) {
+    Object.keys(store.getState().translations.activations).forEach((activationId) =>
+      firestoreRedux.translation.stop(activationId)
+    );
+
+    const { docs } = store.getState().translations;
+    forEach(docs, (documents, collection) => {
+      forEach(documents, (document, docId) =>
+        store.dispatch(translationActions._removeDocTranslation(collection, docId))
+      );
+    });
+
+    forEach(get(store.getState(), "firestore.docs"), (documents, collection) => {
+      const docIds = Object.keys(documents);
+      if (docIds.length) {
+        store.dispatch(
+          firestoreRedux.actions.deleteDocs(collection, docIds, {
+            localWrite: true,
+            remoteWrite: false,
+          })
+        );
+      }
+    });
+
+    const translateCalls = this.__installStubTranslator({ latency: 0 });
+    firestoreRedux.translation.setSchema({});
+    firestoreRedux.translation.setLanguage("hi");
+    collectionsAndDocs.forEach(([collection, document]) => this.__seedDoc(collection, document));
+    return translateCalls;
+  }
+
+  /** @returns {Array} `collection/docId` of every document currently in `/translations.docs`. */
+  _translatedDocumentKeys() {
+    const keys = [];
+    forEach(store.getState().translations.docs, (documents, collection) => {
+      forEach(documents, (document, docId) => keys.push(`${collection}/${docId}`));
+    });
+    return keys.sort();
+  }
+
+  _reportActivationScenario(title, lines, data) {
+    this._activationOutput = [title, "", ...lines].join("\n");
     console.group(`%c${title}`, "font-weight: bold");
     lines.forEach((line) => console.log(line));
     data && console.log(data);

@@ -220,6 +220,18 @@ only at the moment the activation starts.
    nothing activation-specific to reconcile, because activations don't carry a language of their own
    (see [Activation](#activation)).
 
+7. **On a document leaving the client** — a document deleted from `firestore.docs` (removed remotely,
+   deleted locally, or dropped when its last query closed) is forgotten: its `docs`/`status` entries
+   go, and it's removed from every activation's index entry. There is nothing left to translate, so
+   no "still matched by another activation" check applies here — that rule is about *scope* changing,
+   not about the document ceasing to exist.
+8. **On `translation.start` for an id that is already started** — the call reconciles that
+   activation's scope exactly as `translation.update` would, rather than failing. A view that
+   re-mounts and calls `start` again with the same id therefore stays correct instead of
+   accumulating duplicate state. (`translation.update` still rejects an id that was never started,
+   or has been stopped — the two calls differ in what they *require*, not in what they do to a live
+   activation.)
+
 This mechanism covers both the narrow, single-record use case and the broad, automatic one — same
 `start/update/stop` calls, a tighter or wider `filterFunction` — independently of how many activations
 are running or how often `language` changes.

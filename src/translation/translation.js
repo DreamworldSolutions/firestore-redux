@@ -3,6 +3,7 @@ import * as translationSelectors from "./redux/selectors.js";
 import { assertValidSchema } from "./schema.js";
 import { toTranslatorFunction } from "./translator.js";
 import TranslationPipeline from "./translation-pipeline.js";
+import Activations from "./activations.js";
 
 /**
  * Public API for the translation capability, exposed as `firestoreRedux.translation`.
@@ -23,6 +24,7 @@ export default class Translation {
     this._translator = undefined;
 
     this._pipeline = new TranslationPipeline(this);
+    this._activations = new Activations(this);
   }
 
   get _store() {
@@ -79,6 +81,38 @@ export default class Translation {
 
     assertValidSchema(schema);
     this._store.dispatch(actions.setSchema(schema));
+  }
+
+  /**
+   * Starts translation for a document scope. Already-loaded matching documents are translated once;
+   * matching documents retrieved later are handled the same way. Multiple activations can coexist
+   * under different ids, covering different or overlapping scopes - all translating into the one
+   * current language.
+   * @param {Object} param0
+   *  @property {String} id Caller-chosen activation id. Mandatory.
+   *  @property {Function} filterFunction `(doc, collection) => Boolean`. Mandatory.
+   */
+  start({ id, filterFunction } = {}) {
+    this._activations.start({ id, filterFunction });
+  }
+
+  /**
+   * Changes an existing activation's scope. Only valid between `start` and `stop` for that id.
+   * @param {String} id Activation id.
+   * @param {Object} param1
+   *  @property {Function} filterFunction New `(doc, collection) => Boolean`. Mandatory.
+   */
+  update(id, { filterFunction } = {}) {
+    this._activations.update(id, { filterFunction });
+  }
+
+  /**
+   * Stops and removes an activation. A document it translated is kept if another still-active
+   * activation still matches it.
+   * @param {String} id Activation id.
+   */
+  stop(id) {
+    this._activations.stop(id);
   }
 
   /**

@@ -5,7 +5,7 @@ import isEmpty from "lodash-es/isEmpty.js";
 import * as actions from "./redux/actions.js";
 import * as translationSelectors from "./redux/selectors.js";
 import * as firestoreSelectors from "../redux/selectors.js";
-import { toWireId } from "./wire-id.js";
+import { toWireId, toDocumentKey } from "./wire-id.js";
 import { fidelityPreserved } from "./fidelity.js";
 import { Status } from "./enums.js";
 
@@ -307,6 +307,6 @@ export default class TranslationPipeline {
    * @private
    */
   __docKey(collection, docId) {
-    return toWireId(collection, docId, "");
+    return toDocumentKey(collection, docId);
   }
 }
