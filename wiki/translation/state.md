@@ -220,6 +220,10 @@ only at the moment the activation starts.
    nothing activation-specific to reconcile, because activations don't carry a language of their own
    (see [Activation](#activation)).
 
+   A translate response for the *previous* language that arrives after the switch is discarded
+   rather than applied — a fast language change can leave a request in flight, and its result is for
+   a language nobody is reading any more. Anything still queued or debounced for the old language is
+   dropped outright, so it can't merge into the new attempt.
 7. **On a document leaving the client** — a document deleted from `firestore.docs` (removed remotely,
    deleted locally, or dropped when its last query closed) is forgotten: its `docs`/`status` entries
    go, and it's removed from every activation's index entry. There is nothing left to translate, so

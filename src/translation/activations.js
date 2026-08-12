@@ -1,8 +1,10 @@
 import cloneDeep from "lodash-es/cloneDeep.js";
 import forEach from "lodash-es/forEach.js";
 import get from "lodash-es/get.js";
-import * as actions from "./redux/actions.js";
-import * as translationSelectors from "./redux/selectors.js";
+import set from "lodash-es/set.js";
+import isEqual from "lodash-es/isEqual.js";
+import * as actions from "../redux/translation/actions.js";
+import * as translationSelectors from "../redux/translation/selectors.js";
 import ActivationDocIndex from "./activation-doc-index.js";
 import { translatableFields } from "./schema.js";
 import { toDocumentKey, fromDocumentKey } from "./wire-id.js";
@@ -200,6 +202,33 @@ export default class Activations {
       return;
     }
 
+    this._startFreshTranslation(collection, docId, document);
+  }
+
+  /**
+   * Throws away whatever a document was translated into and translates it again from its original,
+   * in whatever language is now current. Used when the language changes - a fresh attempt, not a
+   * diff against the previous language's result.
+   * @param {String} collection Collection / Subcollection ID.
+   * @param {String} docId Document Id.
+   * @param {Object} document The original document.
+   * @private
+   */
+  _retranslateDocument(collection, docId, document) {
+    // Anything queued or debounced for the old language would otherwise merge into this attempt.
+    this._translation._pipeline.cancelPendingTranslation(collection, docId);
+    this._startFreshTranslation(collection, docId, document);
+  }
+
+  /**
+   * Creates the clone and sends every translatable field. Shared by the first translation of a
+   * document and by a re-translation after a language change.
+   * @param {String} collection Collection / Subcollection ID.
+   * @param {String} docId Document Id.
+   * @param {Object} document The original document.
+   * @private
+   */
+  _startFreshTranslation(collection, docId, document) {
     // Matching is tracked either way, but nothing translates until both a Translator and a language
     // are configured - so no entries are created yet.
     if (!this._translation._translator || !translationSelectors.language(this._store.getState())) {
@@ -224,6 +253,89 @@ export default class Activations {
     }
 
     this._translation._translateDocument({ collection, docId, fields, debounce: false });
+  }
+
+  /**
+   * Re-translates every document any activation currently covers, into the language that is now
+   * current. One pass over the whole matched set, however many activations produced it - there is
+   * nothing activation-specific to reconcile, because activations carry no language of their own.
+   *
+   * Reads the matched set from the index rather than from `docs`, so a document that was matched
+   * while no language was set - and therefore has no `docs` entry yet - is picked up here too.
+   */
+  retranslateMatchedDocuments() {
+    const matchedDocumentKeys = new Set();
+    Object.keys(this._filterFunctions).forEach((activationId) => {
+      this._index.documentKeys(activationId).forEach((documentKey) =>
+        matchedDocumentKeys.add(documentKey)
+      );
+    });
+
+    matchedDocumentKeys.forEach((documentKey) => {
+      const { collection, docId } = fromDocumentKey(documentKey);
+      const document = this._document(collection, docId);
+      if (document) {
+        this._retranslateDocument(collection, docId, document);
+      }
+    });
+  }
+
+  /**
+   * Applies an update to an already-translated document, field by field.
+   *
+   * A translatable field whose raw value changed is re-sent, debounced. A field that changed but
+   * isn't translatable is copied straight into the clone. A field that didn't change keeps whatever
+   * the clone already holds for it - including its existing translation. A changed translatable
+   * field also keeps its previous translation until its translate call actually starts; the pipeline
+   * resets it to the source value at that point.
+   *
+   * @param {String} collection Collection / Subcollection ID.
+   * @param {String} docId Document Id.
+   * @param {Object} document The document as it now stands.
+   * @param {Object} previousDocument The document as it stood before this update.
+   * @private
+   */
+  _applyDocumentUpdate(collection, docId, document, previousDocument) {
+    const existingClone = get(this._store.getState(), `translations.docs.${collection}.${docId}`);
+    if (!existingClone) {
+      this._translateMatchedDocument(collection, docId, document);
+      return;
+    }
+
+    const schema = translationSelectors.schema(this._store.getState());
+    const currentFields = translatableFields(document, collection, schema);
+
+    const previousValuesByPath = {};
+    translatableFields(previousDocument, collection, schema).forEach((field) => {
+      previousValuesByPath[field.path] = field.value;
+    });
+
+    // Start from the new original - that copies every changed non-translatable field through
+    // immediately - then lay the translations already held back over it.
+    const updatedClone = cloneDeep(document);
+    currentFields.forEach((field) => {
+      const heldTranslation = get(existingClone, field.path);
+      if (heldTranslation !== undefined) {
+        set(updatedClone, field.path, heldTranslation);
+      }
+    });
+
+    if (!isEqual(updatedClone, existingClone)) {
+      this._store.dispatch(actions._setTranslatedDoc(collection, docId, updatedClone));
+    }
+
+    const changedFields = currentFields.filter(
+      (field) => previousValuesByPath[field.path] !== field.value
+    );
+
+    if (changedFields.length) {
+      this._translation._translateDocument({
+        collection,
+        docId,
+        fields: changedFields,
+        debounce: true,
+      });
+    }
   }
 
   /**
@@ -289,7 +401,7 @@ export default class Activations {
 
       forEach(documents, (document, docId) => {
         if (document !== previousDocuments[docId]) {
-          this._reconcileDocumentMatches(collection, docId, document);
+          this._reconcileDocumentMatches(collection, docId, document, previousDocuments[docId]);
         }
       });
 
@@ -308,18 +420,17 @@ export default class Activations {
   }
 
   /**
-   * Re-evaluates every activation's filter against one document and applies the difference. Handles
-   * a document arriving for the first time, and an update that makes it start or stop matching.
-   *
-   * Re-translating a *changed* field of an already-matched document is a separate concern - see the
-   * diffed-update behaviour in wiki/translation/state.md#behaviors item 3.
+   * Re-evaluates every activation's filter against one document, then applies the difference:
+   * membership first - a document arriving, or an update that makes it start or stop matching - and
+   * then, for a document that is still matched, the per-field diff of the update itself.
    *
    * @param {String} collection Collection / Subcollection ID.
    * @param {String} docId Document Id.
    * @param {Object} document The document as it now stands.
+   * @param {Object} previousDocument The document as it stood before, if it was already loaded.
    * @private
    */
-  _reconcileDocumentMatches(collection, docId, document) {
+  _reconcileDocumentMatches(collection, docId, document, previousDocument) {
     if (!document) {
       this._forgetDocument(collection, docId);
       return;
@@ -336,14 +447,19 @@ export default class Activations {
       }
     });
 
-    if (this._index.hasAnyActivation(documentKey)) {
-      this._translateMatchedDocument(collection, docId, document);
+    if (!this._index.hasAnyActivation(documentKey)) {
+      if (previousActivationIds.length) {
+        this._removeUnmatchedTranslation(documentKey);
+      }
       return;
     }
 
-    if (previousActivationIds.length) {
-      this._removeUnmatchedTranslation(documentKey);
+    if (previousDocument) {
+      this._applyDocumentUpdate(collection, docId, document, previousDocument);
+      return;
     }
+
+    this._translateMatchedDocument(collection, docId, document);
   }
 
   /**

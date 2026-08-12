@@ -5,8 +5,8 @@ import forEach from "lodash-es/forEach";
 import get from "lodash-es/get";
 import { store } from "./store";
 import firestoreRedux from "../src/firestore-redux";
-import * as translationActions from "../src/translation/redux/actions.js";
-import * as translationSelectors from "../src/translation/redux/selectors.js";
+import * as translationActions from "../src/redux/translation/actions.js";
+import * as translationSelectors from "../src/redux/translation/selectors.js";
 import { translatableFields, documentFieldSchema, skipReason } from "../src/translation/schema.js";
 import { Status } from "../src/translation/enums.js";
 import { toWireId, fromWireId } from "../src/translation/wire-id.js";
@@ -193,6 +193,11 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     _activationOutput: { type: String },
 
     /**
+     * Human readable result of the last document-change scenario that was run.
+     */
+    _documentChangeOutput: { type: String },
+
+    /**
      * `true` while a scenario is running. Every scenario starts by wiping the shared demo state, so
      * running two at once lets the second one pull state out from under the first.
      */
@@ -221,6 +226,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     this._pipelineOutput = "Run a scenario to see its result here (and in the console).";
     this._translatorOutput = "Run a scenario to see its result here (and in the console).";
     this._activationOutput = "Run a scenario to see its result here (and in the console).";
+    this._documentChangeOutput = "Run a scenario to see its result here (and in the console).";
     this._realEndpointUrl = "";
     this._realEndpointMethod = "GET";
     this._translationSchemaString = `{
@@ -247,8 +253,48 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     return html`
       ${this._translationTemplate} ${this._pipelineTemplate}
       ${this._translatorTemplate} ${this._activationTemplate}
-      ${this._readByQueryTemplate} ${this._readByDocTemplate}
-      ${this._cancelQueryTemplate} ${this._saveDeleteTemplate}
+      ${this._documentChangeTemplate} ${this._readByQueryTemplate}
+      ${this._readByDocTemplate} ${this._cancelQueryTemplate}
+      ${this._saveDeleteTemplate}
+    `;
+  }
+
+  get _documentChangeTemplate() {
+    return html`
+      <div class="request-query_container card">
+        <h6 class="headline6">
+          Translation &mdash; document changes &amp; language changes
+        </h6>
+        <div class="translation-actions">
+          <dw-button
+            raised
+            ?disabled=${this._isScenarioRunning}
+            @click=${this._scenarioClick(this._runFieldDiffScenario)}
+            >D1. Diffed field update (~2s)</dw-button
+          >
+          <dw-button
+            raised
+            ?disabled=${this._isScenarioRunning}
+            @click=${this._scenarioClick(this._runFailureThenLanguageChangeScenario)}
+            >D2. Failure, then new language</dw-button
+          >
+          <dw-button
+            raised
+            ?disabled=${this._isScenarioRunning}
+            @click=${this._scenarioClick(this._runLanguageChangeAcrossActivationsScenario)}
+            >D3. One setLanguage, two activations</dw-button
+          >
+          <dw-button
+            raised
+            ?disabled=${this._isScenarioRunning}
+            @click=${this._scenarioClick(this._runStaleResponseScenario)}
+            >D4. Stale response discarded</dw-button
+          >
+        </div>
+
+        <h6 class="headline6">Result</h6>
+        <pre class="output">${this._documentChangeOutput}</pre>
+      </div>
     `;
   }
 
@@ -1875,6 +1921,277 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
   }
 
   /**
+   * D1: only the field whose raw value changed is re-sent; its siblings keep the translations they
+   * already had, and a non-translatable change makes no translate call at all.
+   */
+  async _runFieldDiffScenario() {
+    const translateCalls = this._prepareActivationScenario([
+      ["posts", { id: "card", title: "Design home page", body: "Original body", views: 1 }],
+    ]);
+
+    firestoreRedux.translation.start({ id: "cards", filterFunction: () => true });
+    await this.__wait(300);
+    const afterFirstPass = cloneDeep(store.getState().translations.docs.posts.card);
+    const callsAfterFirstPass = translateCalls.length;
+
+    // Change ONE translatable field.
+    this.__seedDoc("posts", { id: "card", title: "Redesign home page", body: "Original body", views: 1 });
+    await this.__wait(DEBOUNCE_WINDOW / 2);
+    const midDebounce = cloneDeep(store.getState().translations.docs.posts.card);
+    const midDebounceStatus = cloneDeep(store.getState().translations.status.posts.card);
+    await this.__wait(DEBOUNCE_WINDOW + 400);
+
+    const afterTitleChange = cloneDeep(store.getState().translations.docs.posts.card);
+    const titleChangeCalls = translateCalls.slice(callsAfterFirstPass);
+    const callsBeforeNonTranslatable = translateCalls.length;
+
+    // Change a NON-translatable field.
+    this.__seedDoc("posts", { id: "card", title: "Redesign home page", body: "Original body", views: 99 });
+    await this.__wait(DEBOUNCE_WINDOW + 400);
+    const afterViewsChange = cloneDeep(store.getState().translations.docs.posts.card);
+
+    this._reportDocumentChangeScenario(
+      "D1 - a document update is diffed field by field",
+      [
+        `after first pass      : ${JSON.stringify(afterFirstPass)}`,
+        "",
+        `CHANGE title -> "Redesign home page"`,
+        `  mid-debounce clone  : ${JSON.stringify(midDebounce.title)}   status: ${midDebounceStatus.status}`,
+        `  after the window    : ${JSON.stringify(afterTitleChange.title)}`,
+        `  fields re-sent      : ${JSON.stringify(titleChangeCalls.map((call) => call.ids))}`,
+        this.__check(
+          titleChangeCalls.length === 1 && titleChangeCalls[0].ids.length === 1,
+          `exactly ONE field was re-sent, not the whole document`
+        ),
+        this.__check(
+          titleChangeCalls[0].ids[0].endsWith("/title"),
+          `and it was 'title' - the field that actually changed`
+        ),
+        this.__check(
+          afterTitleChange.body === afterFirstPass.body,
+          `'body' kept the translation it already had, untouched`
+        ),
+        this.__check(
+          midDebounce.title === afterFirstPass.title && midDebounceStatus.status === Status.SUCCESS,
+          `during the quiet window the clone still showed the PREVIOUS translation, status unchanged`
+        ),
+        "",
+        `CHANGE views -> 99  (not translatable)`,
+        `  translate calls     : ${callsBeforeNonTranslatable} before, ${translateCalls.length} after`,
+        `  clone.views         : ${JSON.stringify(afterViewsChange.views)}`,
+        this.__check(
+          translateCalls.length === callsBeforeNonTranslatable,
+          `no translate call was made for a non-translatable change`
+        ),
+        this.__check(afterViewsChange.views === 99, `the new value was copied straight into the clone`),
+        this.__check(
+          afterViewsChange.title === afterTitleChange.title && afterViewsChange.body === afterFirstPass.body,
+          `and no translated value changed`
+        ),
+      ],
+      { afterFirstPass, afterTitleChange, afterViewsChange, translateCalls }
+    );
+  }
+
+  /**
+   * D2: a field that failed under one language is retried fresh under the next - status is
+   * recomputed, not carried over.
+   */
+  async _runFailureThenLanguageChangeScenario() {
+    this._prepareActivationScenario([
+      ["posts", { id: "card", title: "Design home page", note: "Keep it simple" }],
+    ]);
+
+    // Fails 'note' under 'hi' only.
+    firestoreRedux.translation.setTranslator(async ({ targetLanguage, items }) => {
+      const translated = {};
+      Object.entries(items).forEach(([wireId, item]) => {
+        translated[wireId] =
+          targetLanguage === "hi" && wireId.endsWith("/note")
+            ? { text: item.text, success: false, error: "unsupported for this language" }
+            : { text: `[${targetLanguage}] ${item.text}`, success: true };
+      });
+      return { targetLanguage, items: translated };
+    });
+
+    firestoreRedux.translation.start({ id: "cards", filterFunction: () => true });
+    await this.__wait(400);
+    const underHindi = cloneDeep(store.getState().translations);
+
+    firestoreRedux.translation.setLanguage("gu");
+    await this.__wait(500);
+    const underGujarati = cloneDeep(store.getState().translations);
+
+    this._reportDocumentChangeScenario(
+      "D2 - a failure under one language is not assumed under the next",
+      [
+        `LANGUAGE 'hi'  (the Translator rejects 'note')`,
+        `  clone  : ${JSON.stringify(underHindi.docs.posts.card)}`,
+        `  status : ${JSON.stringify(underHindi.status.posts.card)}`,
+        this.__check(
+          underHindi.status.posts.card.status === Status.PARTIAL_FAILURE,
+          `PARTIAL_FAILURE - 'title' succeeded, 'note' failed`
+        ),
+        this.__check(
+          JSON.stringify(underHindi.status.posts.card.failedFields) === '["note"]',
+          `failedFields names exactly the failing field`
+        ),
+        this.__check(
+          underHindi.docs.posts.card.note === "Keep it simple",
+          `the failed field kept its source value, not null`
+        ),
+        "",
+        `setLanguage('gu')  (the Translator accepts everything)`,
+        `  clone  : ${JSON.stringify(underGujarati.docs.posts.card)}`,
+        `  status : ${JSON.stringify(underGujarati.status.posts.card)}`,
+        this.__check(
+          underGujarati.status.posts.card.status === Status.SUCCESS,
+          `status recomputed from scratch as SUCCESS - the old failure was not carried over`
+        ),
+        this.__check(
+          underGujarati.status.posts.card.failedFields.length === 0,
+          `failedFields cleared`
+        ),
+        this.__check(
+          underGujarati.docs.posts.card.note === "[gu] Keep it simple",
+          `the previously-failing field translated this time`
+        ),
+        this.__check(
+          underGujarati.docs.posts.card.title === "[gu] Design home page",
+          `and it re-translated from the ENGLISH original, not from the Hindi result`
+        ),
+      ],
+      { underHindi, underGujarati }
+    );
+  }
+
+  /**
+   * D3: one `setLanguage` call re-translates every activation's documents in a single pass.
+   */
+  async _runLanguageChangeAcrossActivationsScenario() {
+    const translateCalls = this._prepareActivationScenario([
+      ["posts", { id: "post-1", title: "Post one" }],
+      ["posts", { id: "shared", title: "Shared post" }],
+      ["comments", { id: "comment-1", text: "Comment one" }],
+      ["other", { id: "loose", title: "Matched by nobody" }],
+    ]);
+
+    firestoreRedux.translation.start({
+      id: "posts-feed",
+      filterFunction: (doc, collection) => collection === "posts",
+    });
+    firestoreRedux.translation.start({
+      id: "comments-feed",
+      filterFunction: (doc, collection) => collection === "comments",
+    });
+    firestoreRedux.translation.start({
+      id: "overlap",
+      filterFunction: (doc) => doc.id === "shared",
+    });
+    await this.__wait(500);
+
+    const beforeLanguageChange = this._translatedDocumentKeys();
+    translateCalls.length = 0;
+
+    firestoreRedux.translation.setLanguage("gu");
+    await this.__wait(600);
+
+    const { docs } = store.getState().translations;
+    const reSentWireIds = translateCalls.flatMap((call) => call.ids).sort();
+
+    this._reportDocumentChangeScenario(
+      "D3 - one setLanguage call, three activations, one pass",
+      [
+        `activations : posts-feed, comments-feed, overlap (overlap also matches posts/shared)`,
+        `translated before the change : ${JSON.stringify(beforeLanguageChange)}`,
+        "",
+        `setLanguage('gu')`,
+        `  wire ids re-sent : ${JSON.stringify(reSentWireIds)}`,
+        `  posts/post-1     : ${JSON.stringify(get(docs, ["posts", "post-1", "title"]))}`,
+        `  posts/shared     : ${JSON.stringify(get(docs, ["posts", "shared", "title"]))}`,
+        `  comments/comment-1: ${JSON.stringify(get(docs, ["comments", "comment-1", "text"]))}`,
+        `  other/loose      : ${JSON.stringify(get(docs, ["other", "loose"]))}`,
+        this.__check(
+          reSentWireIds.length === 3,
+          `three documents re-translated - the shared one exactly ONCE, not once per activation`
+        ),
+        this.__check(
+          translateCalls.every((call) => call.targetLanguage === "gu"),
+          `every call used the new language`
+        ),
+        this.__check(
+          String(get(docs, ["posts", "post-1", "title"])).startsWith("[gu]") &&
+            String(get(docs, ["comments", "comment-1", "text"])).startsWith("[gu]"),
+          `both activations' documents moved language, with no per-activation call`
+        ),
+        this.__check(
+          get(docs, ["other", "loose"]) === undefined,
+          `a document matched by no activation was unaffected`
+        ),
+      ],
+      { reSentWireIds, docs }
+    );
+  }
+
+  /**
+   * D4: a response for the previous language that arrives after the switch is discarded.
+   */
+  async _runStaleResponseScenario() {
+    this._prepareActivationScenario([["posts", { id: "card", title: "Design home page" }]]);
+
+    let releaseSlowResponse;
+    firestoreRedux.translation.setTranslator(async ({ targetLanguage, items }) => {
+      if (targetLanguage === "hi") {
+        await new Promise((resolve) => (releaseSlowResponse = resolve));
+      }
+      const translated = {};
+      Object.entries(items).forEach(([wireId, item]) => {
+        translated[wireId] = { text: `[${targetLanguage}] ${item.text}`, success: true };
+      });
+      return { targetLanguage, items: translated };
+    });
+
+    firestoreRedux.translation.start({ id: "cards", filterFunction: () => true });
+    await this.__wait(200);
+
+    firestoreRedux.translation.setLanguage("gu");
+    await this.__wait(400);
+    const afterSwitch = get(store.getState(), "translations.docs.posts.card.title");
+
+    releaseSlowResponse();
+    await this.__wait(500);
+    const afterStaleArrived = get(store.getState(), "translations.docs.posts.card.title");
+    const status = get(store.getState(), "translations.status.posts.card");
+
+    this._reportDocumentChangeScenario(
+      "D4 - a response for the old language, arriving late, is discarded",
+      [
+        `The 'hi' request is held open, then setLanguage('gu') runs and completes,`,
+        `then the held 'hi' response is released.`,
+        "",
+        `after switching to 'gu'        : ${JSON.stringify(afterSwitch)}`,
+        `after the late 'hi' response   : ${JSON.stringify(afterStaleArrived)}`,
+        `status                          : ${JSON.stringify(status)}`,
+        this.__check(String(afterSwitch).startsWith("[gu]"), `the new language was applied`),
+        this.__check(
+          afterStaleArrived === afterSwitch,
+          `the late response did NOT overwrite it with stale Hindi`
+        ),
+        this.__check(status.status === Status.SUCCESS, `and status stayed correct`),
+      ],
+      { afterSwitch, afterStaleArrived, status }
+    );
+  }
+
+  _reportDocumentChangeScenario(title, lines, data) {
+    this._documentChangeOutput = [title, "", ...lines].join("\n");
+    console.group(`%c${title}`, "font-weight: bold");
+    lines.forEach((line) => console.log(line));
+    data && console.log(data);
+    console.groupEnd();
+  }
+
+  /**
    * Builds a click handler that refuses to start a scenario while another is still running.
    * Scenarios each wipe the shared demo state up front and then await for seconds, so overlapping
    * two of them makes the earlier one read state the later one already cleared.
@@ -2152,9 +2469,13 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
    * @returns {Array} Recorded translate calls.
    */
   _prepareActivationScenario(collectionsAndDocs) {
-    Object.keys(store.getState().translations.activations).forEach((activationId) =>
-      firestoreRedux.translation.stop(activationId)
-    );
+    Object.keys(store.getState().translations.activations).forEach((activationId) => {
+      firestoreRedux.translation.stop(activationId);
+      // The state-shape scenarios write activations straight into redux to demonstrate the shape,
+      // bypassing start() - so stop() doesn't recognise them and leaves them behind. Clear whatever
+      // survived, or a later scenario counts activations it never created.
+      store.dispatch(translationActions._removeActivation(activationId));
+    });
 
     const { docs } = store.getState().translations;
     forEach(docs, (documents, collection) => {
@@ -2216,6 +2537,7 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
       inFlight++;
       const ids = Object.keys(items);
       const call = {
+        targetLanguage,
         ids,
         count: ids.length,
         chars: Object.values(items).reduce((total, item) => total + item.text.length, 0),

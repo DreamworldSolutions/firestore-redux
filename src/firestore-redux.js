@@ -1,9 +1,9 @@
 import * as _actions from "./redux/actions.js";
 import * as _selectors from "./redux/selectors.js";
 import firestoreReducer from "./redux/reducers.js";
-import * as _translationActions from "./translation/redux/actions.js";
-import * as _translationSelectors from "./translation/redux/selectors.js";
-import translationReducer from "./translation/redux/reducers.js";
+import * as _translationActions from "./redux/translation/actions.js";
+import * as _translationSelectors from "./redux/translation/selectors.js";
+import translationReducer from "./redux/translation/reducers.js";
 import Translation from "./translation/translation.js";
 import { initializeFirestore } from "firebase/firestore";
 import Query from "./query.js";

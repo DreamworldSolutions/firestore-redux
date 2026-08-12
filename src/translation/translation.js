@@ -1,5 +1,5 @@
-import * as actions from "./redux/actions.js";
-import * as translationSelectors from "./redux/selectors.js";
+import * as actions from "../redux/translation/actions.js";
+import * as translationSelectors from "../redux/translation/selectors.js";
 import { assertValidSchema } from "./schema.js";
 import { toTranslatorFunction } from "./translator.js";
 import TranslationPipeline from "./translation-pipeline.js";
@@ -67,6 +67,10 @@ export default class Translation {
     }
 
     this._store.dispatch(actions.setLanguage(language));
+
+    // One pass over every document any activation covers - not one pass per activation, and not a
+    // diff against the old language's result. See wiki/translation/state.md#behaviors item 6.
+    this._activations.retranslateMatchedDocuments();
   }
 
   /**
