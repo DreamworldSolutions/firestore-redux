@@ -11,6 +11,13 @@ import { toDocumentKey, fromDocumentKey } from "./wire-id.js";
 import { Status } from "./enums.js";
 
 /**
+ * Stands in for `firestore.docs` before anything is loaded. A shared constant, not a fresh `{}` per
+ * read - `_reconcileRetrievedDocuments` compares this by reference, and a new object every dispatch
+ * would defeat that.
+ */
+const NO_DOCUMENTS = {};
+
+/**
  * The activation lifecycle: which documents are in scope, and keeping that answer true as
  * activations start, change scope, and stop, and as documents arrive from Firestore.
  *
@@ -56,6 +63,14 @@ export default class Activations {
     this._assertUsable("start", id, filterFunction);
 
     const isAlreadyActive = !!this._filterFunctions[id];
+    if (isAlreadyActive) {
+      // Re-starting changes scope rather than failing, so an accidental second start with a
+      // different filterFunction would silently replace the first one.
+      console.warn(
+        `firestore-redux > translation.start : '${id}' is already started, so its scope has been replaced. Use translation.update to change an activation's scope.`
+      );
+    }
+
     this._filterFunctions[id] = filterFunction;
     this._store.dispatch(actions._addActivation({ id, filterFunction }));
 
@@ -79,7 +94,7 @@ export default class Activations {
     this._assertUsable("update", id, filterFunction);
 
     if (!this._filterFunctions[id]) {
-      throw `firestore-redux > translation.update : '${id}' is not a started activation.`;
+      throw new Error(`firestore-redux > translation.update : '${id}' is not a started activation.`);
     }
 
     this._filterFunctions[id] = filterFunction;
@@ -90,6 +105,10 @@ export default class Activations {
   /**
    * Stops and removes an activation. Documents it covered are kept if another still-active
    * activation matches them.
+   *
+   * An unknown or already-stopped id is a no-op, not an error - teardown often runs more than once.
+   * `update` throws in the same situation on purpose: stopping something that isn't running is
+   * already the intended end state, updating it can't be.
    * @param {String} id Activation id.
    */
   stop(id) {
@@ -117,15 +136,15 @@ export default class Activations {
    */
   _assertUsable(caller, id, filterFunction) {
     if (!this._store) {
-      throw `firestore-redux > translation.${caller} : firestore-redux is not initialized yet.`;
+      throw new Error(`firestore-redux > translation.${caller} : firestore-redux is not initialized yet.`);
     }
 
     if (!id || typeof id !== "string") {
-      throw `firestore-redux > translation.${caller} : id must be a non-empty String. ${id}`;
+      throw new Error(`firestore-redux > translation.${caller} : id must be a non-empty String. ${id}`);
     }
 
     if (typeof filterFunction !== "function") {
-      throw `firestore-redux > translation.${caller} : filterFunction must be a Function.`;
+      throw new Error(`firestore-redux > translation.${caller} : filterFunction must be a Function.`);
     }
   }
 
@@ -382,6 +401,13 @@ export default class Activations {
    * Finds what changed under `firestore.docs` since the last dispatch and reconciles only that.
    * Collections and documents that didn't change keep their object identity, so this costs a few
    * reference comparisons on a dispatch that touched nothing relevant.
+   *
+   * That last part is an assumption about the Firestore reducer: that it builds new objects only for
+   * the branches an action actually touched. If that ever stops holding, this degrades rather than
+   * breaks - every loaded document gets re-examined on every dispatch, but nothing is written and
+   * nothing is re-translated, because the work downstream is guarded by value and not by identity
+   * (`isEqual` before dispatching a clone, and a per-field value comparison before re-translating).
+   * The cost would be CPU alone: no extra renders, no extra Translator calls.
    * @private
    */
   _reconcileRetrievedDocuments() {
@@ -474,7 +500,7 @@ export default class Activations {
 
   /** @returns {Object} `firestore.docs`, keyed by collection. @private */
   _documentsByCollection() {
-    return get(this._store.getState(), "firestore.docs", {});
+    return get(this._store.getState(), "firestore.docs") || NO_DOCUMENTS;
   }
 
   /** @returns {Object} One loaded document. @private */

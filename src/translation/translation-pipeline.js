@@ -6,7 +6,6 @@ import * as actions from "../redux/translation/actions.js";
 import * as translationSelectors from "../redux/translation/selectors.js";
 import * as firestoreSelectors from "../redux/selectors.js";
 import { toWireId, toDocumentKey } from "./wire-id.js";
-import { fidelityPreserved } from "./fidelity.js";
 import { Status } from "./enums.js";
 
 /**
@@ -25,9 +24,9 @@ export const MAX_CONCURRENT_REQUESTS = 3;
 
 /**
  * Everything between "these fields need translating" and "the result is in redux": debouncing,
- * batching, calling the Translator, validating fidelity, and recording success or failure per field.
+ * batching, calling the Translator, and recording success or failure per field.
  *
- * See wiki/translation/architecture.md#fidelity-chunking-and-wire-addressing.
+ * See wiki/translation/architecture.md#chunking-and-wire-addressing.
  */
 export default class TranslationPipeline {
   /**
@@ -109,16 +108,18 @@ export default class TranslationPipeline {
     const docKey = this._documentKey(collection, docId);
     this._ensureDocumentClone(collection, docId);
 
-    const attempt =
-      this._attempts[docKey] || (this._attempts[docKey] = { attempted: 0, remaining: new Set(), failed: [] });
+    // `outcomes` holds one entry per field - `null` while in flight, `true`/`false` once settled -
+    // so a field queued again mid-attempt is still one field, not two. A running tally can't do
+    // that: it would count the re-queue as an extra attempt and skew the SUCCESS/PARTIAL/FAILED
+    // decision below.
+    const attempt = this._attempts[docKey] || (this._attempts[docKey] = { outcomes: new Map(), remaining: new Set() });
 
     const sourceValues = {};
 
     fields.forEach((field) => {
-      if (!attempt.remaining.has(field.path)) {
-        attempt.remaining.add(field.path);
-        attempt.attempted++;
-      }
+      attempt.remaining.add(field.path);
+      // Re-attempting drops whatever the field settled to before; only the latest outcome counts.
+      attempt.outcomes.set(field.path, null);
 
       sourceValues[field.path] = field.value;
 
@@ -276,11 +277,9 @@ export default class TranslationPipeline {
         (byDoc[item.docKey] = { collection: item.collection, docId: item.docId, translated: {}, failed: [] });
 
       const result = responseItems && responseItems[toWireId(item.collection, item.docId, item.path)];
-      const accepted =
-        !!result &&
-        result.success === true &&
-        typeof result.text === "string" &&
-        fidelityPreserved(item.text, result.text, item.contentType);
+      // Whether a translation preserved the source's HTML/Markdown structure is the Translator's
+      // responsibility, not this library's - see wiki/translation/translator-function-spec.md.
+      const accepted = !!result && result.success === true && typeof result.text === "string";
 
       if (accepted) {
         group.translated[item.path] = result.text;
@@ -311,11 +310,18 @@ export default class TranslationPipeline {
       return;
     }
 
-    Object.keys(translated).forEach((path) => attempt.remaining.delete(path));
-    failed.forEach((path) => {
+    // A path missing from `outcomes` isn't part of this attempt - a response that outlived the
+    // attempt it belonged to. Recording it would invent a field the attempt never queued.
+    const recordOutcome = (path, succeeded) => {
+      if (!attempt.outcomes.has(path)) {
+        return;
+      }
       attempt.remaining.delete(path);
-      attempt.failed.push(path);
-    });
+      attempt.outcomes.set(path, succeeded);
+    };
+
+    Object.keys(translated).forEach((path) => recordOutcome(path, true));
+    failed.forEach((path) => recordOutcome(path, false));
 
     if (attempt.remaining.size) {
       return;
@@ -323,15 +329,20 @@ export default class TranslationPipeline {
 
     delete this._attempts[docKey];
 
-    const status = !attempt.failed.length
+    const failedFields = [];
+    attempt.outcomes.forEach((succeeded, path) => {
+      if (succeeded === false) {
+        failedFields.push(path);
+      }
+    });
+
+    const status = !failedFields.length
       ? Status.SUCCESS
-      : attempt.failed.length === attempt.attempted
+      : failedFields.length === attempt.outcomes.size
       ? Status.FAILED
       : Status.PARTIAL_FAILURE;
 
-    this._store.dispatch(
-      actions._setDocStatus(collection, docId, { status, failedFields: attempt.failed })
-    );
+    this._store.dispatch(actions._setDocStatus(collection, docId, { status, failedFields }));
   }
 
   /**

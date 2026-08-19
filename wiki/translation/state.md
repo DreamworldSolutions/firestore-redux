@@ -12,7 +12,7 @@ See [README.md](./README.md) to get started, [user-guide.md](./user-guide.md) fo
 | ----------- | ------------------------------------------------------------------------------ | ----------- |
 | language    | String                                                                          | The current target language — a single, app-wide value, set by `translation.setLanguage`. Not per-activation; see [Activation](#activation). |
 | activations | Map<id, [Activation](#activation)>                                            | key = activation id, from `translation.start` |
-| schema      | Map<collectionId, Map<documentId, Map<fieldPath, [FieldSchema](#fieldschema)>>> | Single value, set whole in one call by `translation.setSchema` — not built up key-by-key like `activations`/`docs`. Replaced entirely on the next call. `documentId` is a specific document ID, or `'*'` — the wildcard applying to every document in the collection that has no more specific entry of its own (almost every integration only ever declares `'*'`). `fieldPath` is dot/bracket-notation (e.g. `'address.city'`, `'members[0].name'` — see [schema-reference.md](./schema-reference.md#field-paths)). |
+| schema      | Map<collectionId, Map<documentId, Map<fieldPath, [FieldSchema](#fieldschema)>>> | Single value, set whole in one call by `translation.setSchema` — not built up key-by-key like `activations`/`docs`. Replaced entirely on the next call. `collectionId` is a collection/subcollection ID, or `'*'` — a base every collection inherits, merged field by field under that collection's own rules (see [schema-reference.md](./schema-reference.md#applying-rules-to-every-collection)). `documentId` is a specific document ID, or `'*'` — the wildcard applying to every document in the collection that has no more specific entry of its own (almost every integration only ever declares `'*'`); unlike the collection level, a document's own entry replaces `'*'` wholesale rather than merging. `fieldPath` is dot/bracket-notation (e.g. `'address.city'`, `'members[0].name'` — see [schema-reference.md](./schema-reference.md#field-paths)). |
 | docs        | Map<collectionId, Map<documentId, [TranslatedDoc](#translateddoc)>>            | Translated documents, one entry per `{collection, docId}` currently translated, in the current `language` |
 | status      | Map<collectionId, Map<documentId, [DocStatus](#docstatus)>>                    | Translation status and failed fields, one entry per `{collection, docId}` — kept in its own branch, separate from `docs`, so a document's own real fields (even one literally named `status` or `failedFields`) never collide with this metadata |
 
@@ -192,7 +192,7 @@ only at the moment the activation starts.
    this document diffs the incoming update against the previous version:
    - A translatable field whose raw value changed is **debounced per document** — a short, fixed quiet
      window that resets on every further change to that document — before being re-sent for translation;
-     see [architecture.md#fidelity-chunking-and-wire-addressing](./architecture.md#fidelity-chunking-and-wire-addressing).
+     see [architecture.md#chunking-and-wire-addressing](./architecture.md#chunking-and-wire-addressing).
      Its previous translated value and any `failedFields` entry for it are cleared once the window
      elapses and the translate call actually starts, not the instant the raw value changes.
    - A field that changed but isn't translatable is copied straight into the clone immediately — no
@@ -263,5 +263,5 @@ Every `Map<K, V>` above is a plain object keyed by a stable ID (activation id, c
 ID, or `'*'`), never an array — consistent with the rest of this library's Redux state (see
 [wiki/state.md](../state.md)) and with how Firestore documents themselves already look as JSON.
 
-See [architecture.md#fidelity-chunking-and-wire-addressing](./architecture.md#fidelity-chunking-and-wire-addressing)
-for the fidelity-validation/chunking/wire-id-bridge logic this relies on.
+See [architecture.md#chunking-and-wire-addressing](./architecture.md#chunking-and-wire-addressing)
+for the chunking/wire-id-bridge logic this relies on.

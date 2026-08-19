@@ -4,10 +4,12 @@ import forEach from "lodash-es/forEach.js";
 import { ContentType } from "./enums.js";
 
 /**
- * Root fields that are identity, not content. Translating a document ID would break every lookup
- * keyed by it. Skipped by default like any other automatic skip, so `{ skip: false }` still forces it.
+ * The library's own base layer, merged underneath every declared schema by `documentFieldSchema`.
+ * A document ID is identity, not content - translating it would break every lookup keyed by it.
+ * Being an ordinary schema layer rather than a hardcoded rule, a schema overrides it the same way it
+ * overrides anything else: `id: { skip: false }`, at whatever level.
  */
-const IDENTITY_ROOT_FIELDS = ["id"];
+const IDENTITY_FIELD_SCHEMA = { id: { skip: true } };
 
 const NUMERIC = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/;
 const BOOLEAN = /^(true|false)$/i;
@@ -20,7 +22,7 @@ const TIME = /^\d{1,2}:\d{2}(:\d{2}(\.\d+)?)?(\s*[AaPp][Mm])?$/;
  * Validates the shape of a schema before it's stored, so a malformed declaration surfaces at the
  * `translation.setSchema` call instead of silently mistranslating documents later.
  * @param {Object} schema Schema as accepted by `translation.setSchema`.
- * @throws {String} When any level of the schema isn't shaped as documented.
+ * @throws {Error} When any level of the schema isn't shaped as documented.
  */
 export const assertValidSchema = (schema) => {
   if (schema === undefined || schema === null) {
@@ -28,32 +30,32 @@ export const assertValidSchema = (schema) => {
   }
 
   if (!isPlainObject(schema)) {
-    throw `firestore-redux > translation.setSchema : schema must be an Object. ${schema}`;
+    throw new Error(`firestore-redux > translation.setSchema : schema must be an Object. ${schema}`);
   }
 
   forEach(schema, (documentSchemas, collection) => {
     if (!isPlainObject(documentSchemas)) {
-      throw `firestore-redux > translation.setSchema : schema.${collection} must be a Map of document Id (or '*') to its field schema.`;
+      throw new Error(`firestore-redux > translation.setSchema : schema.${collection} must be a Map of document Id (or '*') to its field schema.`);
     }
 
     forEach(documentSchemas, (fieldSchemas, documentId) => {
       if (!isPlainObject(fieldSchemas)) {
-        throw `firestore-redux > translation.setSchema : schema.${collection}.${documentId} must be a Map of field path to { contentType, skip }.`;
+        throw new Error(`firestore-redux > translation.setSchema : schema.${collection}.${documentId} must be a Map of field path to { contentType, skip }.`);
       }
 
       forEach(fieldSchemas, (fieldSchema, fieldPath) => {
         if (!isPlainObject(fieldSchema)) {
-          throw `firestore-redux > translation.setSchema : schema.${collection}.${documentId}.${fieldPath} must be an Object. e.g. { contentType: 'HTML', skip: false }`;
+          throw new Error(`firestore-redux > translation.setSchema : schema.${collection}.${documentId}.${fieldPath} must be an Object. e.g. { contentType: 'HTML', skip: false }`);
         }
 
         if (fieldSchema.contentType !== undefined && !ContentType[fieldSchema.contentType]) {
-          throw `firestore-redux > translation.setSchema : schema.${collection}.${documentId}.${fieldPath}.contentType must be one of ${Object.keys(
+          throw new Error(`firestore-redux > translation.setSchema : schema.${collection}.${documentId}.${fieldPath}.contentType must be one of ${Object.keys(
             ContentType
-          ).join(", ")}. ${fieldSchema.contentType}`;
+          ).join(", ")}. ${fieldSchema.contentType}`);
         }
 
         if (fieldSchema.skip !== undefined && typeof fieldSchema.skip !== "boolean") {
-          throw `firestore-redux > translation.setSchema : schema.${collection}.${documentId}.${fieldPath}.skip must be a Boolean. ${fieldSchema.skip}`;
+          throw new Error(`firestore-redux > translation.setSchema : schema.${collection}.${documentId}.${fieldPath}.skip must be a Boolean. ${fieldSchema.skip}`);
         }
       });
     });
@@ -61,11 +63,39 @@ export const assertValidSchema = (schema) => {
 };
 
 /**
+ * Picks a collection's entry for one document: the document's own entry when it has one, the
+ * collection's `'*'` entry otherwise. Never merged - a document's own entry replaces `'*'` wholesale.
+ *
+ * @param {Object} collectionSchema One collection's document-schema map, or `undefined`.
+ * @param {String} docId Document Id.
+ * @returns {Object|undefined} That document's field schema, or `undefined` when none applies.
+ * @private
+ */
+const documentEntry = (collectionSchema, docId) => {
+  if (!collectionSchema) {
+    return undefined;
+  }
+
+  const ownSchema = docId === undefined ? undefined : collectionSchema[docId];
+  return ownSchema || collectionSchema["*"];
+};
+
+/**
  * Resolves which field schema applies to a single document.
  *
- * A document's own entry replaces the collection's `'*'` entry wholesale - `'*'` covers every
- * document in the collection that has no more specific entry of its own, so the two are never
- * merged. See wiki/translation/state.md (the `schema` row).
+ * Three layers, lowest precedence first: this library's own defaults (`IDENTITY_FIELD_SCHEMA`), the
+ * cross-collection base, then the collection's own rules.
+ *
+ * Two levels of wildcard, and they behave differently on purpose:
+ * - Across collections, the top-level `'*'` entry is a base every collection inherits, and a
+ *   collection's own entry is merged over it field by field. Rules shared by every collection
+ *   (`accountId`, `boardId`, ...) are declared once instead of repeated per collection.
+ * - Within a collection, a document's own entry replaces the collection's `'*'` entry wholesale.
+ *
+ * Merging across collections but not across documents is deliberate: the cross-collection case is
+ * "these common fields, everywhere" - useless if declaring one collection-specific rule dropped the
+ * shared ones - whereas a per-document entry exists precisely to describe that one document instead.
+ * See wiki/translation/schema-reference.md#applying-rules-to-every-collection.
  *
  * @param {Object} schema Whole schema, from `/translations.schema`.
  * @param {String} collection Collection / Subcollection ID.
@@ -73,29 +103,25 @@ export const assertValidSchema = (schema) => {
  * @returns {Object} Map of field path to `{ contentType, skip }`. Empty when nothing is declared.
  */
 export const documentFieldSchema = (schema, collection, docId) => {
-  const collectionSchema = schema && schema[collection];
-  if (!collectionSchema) {
-    return {};
-  }
+  const collectionFields = documentEntry(schema && schema[collection], docId);
+  // `collection === '*'` would otherwise merge the base with itself - same result, wasted work.
+  const baseFields = collection === "*" ? undefined : documentEntry(schema && schema["*"], docId);
 
-  const ownSchema = docId === undefined ? undefined : collectionSchema[docId];
-  return ownSchema || collectionSchema["*"] || {};
+  return { ...IDENTITY_FIELD_SCHEMA, ...baseFields, ...collectionFields };
 };
 
 /**
  * Explains why the defaults skip a value, for diagnostics - which rule fired, in words. Overridable
  * per field with `{ skip: false }`.
+ *
+ * Purely a question about the value's shape; which *field* a value sits in is decided by the schema
+ * layers in `documentFieldSchema` instead, the library's own `id` rule included.
  * See wiki/translation/schema-reference.md#automatic-default-skips-overridable.
  *
  * @param {String} value Field value. Always a String - non-strings never reach here.
- * @param {String} path Field path, dot/bracket notation.
  * @returns {String|undefined} The rule that skipped it, or `undefined` when nothing does.
  */
-export const skipReason = (value, path) => {
-  if (IDENTITY_ROOT_FIELDS.includes(path)) {
-    return "identity field - a document ID is never content";
-  }
-
+export const skipReason = (value) => {
   const text = value.trim();
   if (NUMERIC.test(text)) {
     return "numeric-shaped";
@@ -119,10 +145,9 @@ export const skipReason = (value, path) => {
 
 /**
  * @param {String} value Field value. Always a String - non-strings never reach here.
- * @param {String} path Field path, dot/bracket notation.
- * @returns {Boolean} `true` when the defaults skip this field.
+ * @returns {Boolean} `true` when the defaults skip this value's shape.
  */
-export const autoSkipped = (value, path) => skipReason(value, path) !== undefined;
+export const autoSkipped = (value) => skipReason(value) !== undefined;
 
 /**
  * Walks a document and collects every field that should be sent for translation, in schema key
@@ -184,7 +209,7 @@ const collectFields = (value, path, fieldSchema, fields) => {
   }
 
   const forced = declared && declared.skip === false;
-  if (!forced && autoSkipped(value, path)) {
+  if (!forced && autoSkipped(value)) {
     return;
   }
 

@@ -10,7 +10,7 @@
  * @param {String|Object|Function} translator A URL string (GET); `{ url, method }` where `method` is
  *  `'GET'` (default) or `'POST'`; or a function already implementing the contract.
  * @returns {Function} The Translator function.
- * @throws {String} When the argument isn't one of the three accepted forms.
+ * @throws {Error} When the argument isn't one of the three accepted forms.
  */
 export const toTranslatorFunction = (translator) => {
   if (typeof translator === "function") {
@@ -24,12 +24,12 @@ export const toTranslatorFunction = (translator) => {
   if (translator && typeof translator.url === "string") {
     const method = (translator.method || "GET").toUpperCase();
     if (method !== "GET" && method !== "POST") {
-      throw `firestore-redux > translation.setTranslator : method must be 'GET' or 'POST'. ${translator.method}`;
+      throw new Error(`firestore-redux > translation.setTranslator : method must be 'GET' or 'POST'. ${translator.method}`);
     }
     return urlTranslator(translator.url, method);
   }
 
-  throw `firestore-redux > translation.setTranslator : translator must be a URL String, { url, method }, or a Function. ${translator}`;
+  throw new Error(`firestore-redux > translation.setTranslator : translator must be a URL String, { url, method }, or a Function. ${translator}`);
 };
 
 /**
@@ -53,7 +53,7 @@ const urlTranslator = (url, method) => async ({ targetLanguage, items }) => {
         });
 
   if (!response.ok) {
-    throw `firestore-redux > translation : translate request failed with ${response.status}.`;
+    throw new Error(`firestore-redux > translation : translate request failed with ${response.status}.`);
   }
 
   return response.json();

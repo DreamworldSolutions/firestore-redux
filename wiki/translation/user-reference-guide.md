@@ -140,6 +140,11 @@ firestoreRedux.translation.start({
 
 - Nothing.
 
+Calling `start` again with an `id` that is already started doesn't fail — it replaces that
+activation's scope, exactly as [`translation.update`](#firestorereduxtranslationupdate) would, and logs a
+warning so an accidental double-start doesn't go unnoticed. Use `translation.update` when changing scope
+is what you meant.
+
 Multiple activations can coexist under different `id`s, covering different (or overlapping) scopes —
 see [state.md#behaviors](./state.md#behaviors). All of them translate into the one current language;
 there's no per-activation language. Refuses to translate anything without both a Translator and a
@@ -191,6 +196,13 @@ firestoreRedux.translation.stop('session');
 ##### returns
 
 - Nothing.
+
+Stopping an `id` that isn't currently started — never started, or already stopped — does nothing and
+doesn't throw. Teardown tends to run more than once (a component disconnecting, a cancelled saga, an
+error path), so `stop` is deliberately idempotent. Note this is the opposite of
+[`translation.update`](#firestorereduxtranslationupdate), which rejects an unknown `id`: stopping
+something that isn't running has already reached the intended end state, while updating something that
+isn't there can't do what the caller meant.
 
 See [Behaviors](./state.md#behaviors) (item 5) — a document this activation translated isn't removed
 if some other still-active activation still matches it.

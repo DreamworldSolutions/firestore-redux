@@ -14,26 +14,30 @@ Two parties, one boundary:
   content type, return translated text, or transliterate it if hinted. It has no awareness of Redux,
   Firestore, activations, or state — it's a stateless text-in/text-out (or text-in/error-out) boundary.
 - **This library** owns everything on the other side of that boundary: deciding which documents and
-  fields need translating, calling the Translator in batches, validating fidelity, storing results,
+  fields need translating, calling the Translator in batches, storing results,
   keeping them in sync as documents change and activations start/stop, and serving them back out
   through the selectors an app already uses.
 
 Nothing about the Translator's own behavior — how well it transliterates a name, whether it detects
 Markdown correctly — is this library's concern; nothing about state management, caching, or runtime
 synchronization is the Translator's concern. See
-[Fidelity, Chunking, and Wire Addressing](#fidelity-chunking-and-wire-addressing) below for the
+[Chunking and Wire Addressing](#chunking-and-wire-addressing) below for the
 specific problems that separation lets this library solve once, internally, instead of every
 integrator solving them ad hoc.
 
-## Fidelity, Chunking, and Wire Addressing
+## Chunking and Wire Addressing
 
 Translating rich content correctly requires solving a few problems, all handled internally — an
 integrator never touches any of this directly:
 
-- **HTML/Markdown fidelity.** Before a translated string is accepted, its tag multiset must match the
-  source (inline tags, mention chips, links). A mismatch — or a translate-call failure — is treated as
-  a failure for that item only; the original is kept, and it's recorded in
+- **Translate-call failures.** A translate-call failure, or an item the Translator reports as failed, is
+  treated as a failure for that item only; the original is kept, and it's recorded in
   [`translation.failedFields`](./selectors-reference.md#firestorereduxselectorstranslationfailedfields).
+  Whether a translated string preserved the source's HTML/Markdown structure is **not** checked here —
+  that is the Translator's own responsibility, stated in
+  [translator-function-spec.md](./translator-function-spec.md#contract-notes) and
+  [translate-api.openapi.yml](./translate-api.openapi.yml). A result marked `success: true` is stored
+  exactly as returned.
 - **Debouncing.** A document's translatable fields aren't re-sent the instant a raw value changes.
   Each document has its own short, fixed quiet window (a few hundred milliseconds); every further change
   to that document resets its window. Only once the window elapses without another change does that
@@ -78,23 +82,6 @@ in; it's the *choice* of which items form the batch that is newest-first, not th
 A document's fields can span several batches. Its `status` is written once — after the last of them
 comes back — never once per batch.
 
-### What Fidelity Actually Compares
-
-The tag multiset is built from these tokens, sorted so that a translator reordering tags to suit the
-target language's grammar passes, while adding, dropping, or re-pointing one fails:
-
-- **Every HTML tag**, by lowercased name, opening and closing counted separately.
-- **Addressing attributes on those tags** — `href`, `src`, and every `data-*` attribute. These
-  identify what a tag *points at*; a mention chip's `data-mention-id` re-pointed at a different user
-  is a fidelity failure even though the visible text is fine. Attributes that carry translatable
-  prose (`title`, `alt`) are deliberately not compared.
-- **For `MARKDOWN`** — additionally each link/image destination, inline code span, and fence.
-  Emphasis markers (`*`, `_`) are not counted; moving them is legitimate.
-
-`PLAIN` skips the check entirely. An **undeclared** content type is scanned as HTML only — a
-genuinely HTML source is the case worth catching, whereas Markdown link syntax appearing in ordinary
-prose would be a false alarm.
-
 ## Data Flow
 
 ```
@@ -115,7 +102,7 @@ scan loaded documents ──► filterFunction ──►   every document curren
    → batched, sent to the Translator     → copied straight into the clone
              │
              ▼
-   fidelity-checked results
+   results
    merged into docs.$collection.$docId          (state.md#translateddoc)
    success/failure recorded into status.$collection.$docId  (state.md#docstatus)
              │

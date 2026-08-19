@@ -36,9 +36,17 @@ interface TranslateResponseItem {
 ## Contract Notes
 
 - **Keys are opaque and must be echoed back unchanged.** The library generates them (see
-  [architecture.md#fidelity-chunking-and-wire-addressing](./architecture.md#fidelity-chunking-and-wire-addressing)
+  [architecture.md#chunking-and-wire-addressing](./architecture.md#chunking-and-wire-addressing)
   for how) — don't parse or rely on their structure, just map each result back onto the same key it
   came in on.
+- **Preserving the source's structure is your responsibility.** A translated string must keep the
+  markup the source had — every HTML tag, every link and image destination, every mention chip's
+  `data-*` attributes, every code span and fence — pointing at what it pointed at before. Reordering
+  tags to suit the target language's grammar is fine; adding, dropping, or re-pointing one is not.
+  This library does not inspect or second-guess what you return: a result marked `success: true` is
+  written into state exactly as given, so a mangled string reaches the app's renderer intact. When you
+  can't translate an item without breaking its structure, return `success: false` for that item — the
+  original is kept, which is a far better outcome than broken markup.
 - **`contentType` absent means the schema didn't declare one for that field.** A capable Translator can
   auto-detect plain text vs. Markdown vs. HTML vs. MDX in that case; a simpler one can just treat it as
   plain text. This is deliberately not defaulted to `'PLAIN'` before it reaches you — see

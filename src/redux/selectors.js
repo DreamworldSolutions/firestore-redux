@@ -38,9 +38,15 @@ const readThroughCollection = (originalDocs, translatedDocs) => {
  *  its translation in the current language once that is available, the original otherwise. See
  *  wiki/translation/selectors-reference.md.
  */
-export const doc = (state, collection, docId) =>
-  get(state, `translations.docs.${collection}.${docId}`) ||
-  get(state, `firestore.docs.${collection}.${docId}`);
+export const doc = (state, collection, docId) => {
+  const original = get(state, `firestore.docs.${collection}.${docId}`);
+  // A translation never brings back a document that is no longer loaded.
+  if (original === undefined) {
+    return undefined;
+  }
+
+  return get(state, `translations.docs.${collection}.${docId}`) || original;
+};
 
 /**
  * @param {Object} state Redux State.

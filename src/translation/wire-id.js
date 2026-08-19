@@ -1,10 +1,15 @@
 /**
  * Separator joining a wire id's three parts.
  *
- * `/` is chosen because Firestore never allows it inside a collection ID, a document ID, or a field
- * path - so it can never appear *within* any part being joined, and the joined string always splits
- * back apart exactly the way it was built. `.` and `-` are legal inside all three, which is why they
- * can't be used here.
+ * `/` is chosen because Firestore never allows it inside a collection ID or a document ID, and `.`
+ * and `-` are legal inside both. Collection keys hold no separator either, even for a subcollection:
+ * `firestore.docs` is keyed by the last path segment, so `users/u1/user-preferences` is stored as
+ * `user-preferences`.
+ *
+ * Field paths are a weaker guarantee, not a Firestore rule - Firestore does permit `/` inside a field
+ * name. It holds here because paths are built from ordinary document keys, and it doesn't need to
+ * hold anyway: both parsers below locate the separators by position from the left and return the
+ * final part whole, so only the two leading parts must be separator-free.
  */
 export const WIRE_ID_SEPARATOR = "/";
 
@@ -31,13 +36,13 @@ export const toDocumentKey = (collection, docId) => `${collection}${WIRE_ID_SEPA
 /**
  * @param {String} documentKey Key as built by `toDocumentKey`.
  * @returns {Object} `{ collection, docId }`
- * @throws {String} When the key doesn't carry both parts.
+ * @throws {Error} When the key doesn't carry both parts.
  */
 export const fromDocumentKey = (documentKey) => {
   const collectionEnd = documentKey === undefined ? -1 : documentKey.indexOf(WIRE_ID_SEPARATOR);
 
   if (collectionEnd === -1) {
-    throw `firestore-redux > translation : '${documentKey}' is not a valid document key.`;
+    throw new Error(`firestore-redux > translation : '${documentKey}' is not a valid document key.`);
   }
 
   return {
@@ -48,17 +53,17 @@ export const fromDocumentKey = (documentKey) => {
 
 /**
  * Splits a wire id back into the three parts it was built from. Splits on the first two separators
- * only, so a field path is returned whole even in the impossible case that it contains one.
+ * only, so a field path is returned whole even if it happens to contain one.
  * @param {String} wireId Wire id, as built by `toWireId`.
  * @returns {Object} `{ collection, docId, fieldPath }`
- * @throws {String} When the id doesn't carry all three parts.
+ * @throws {Error} When the id doesn't carry all three parts.
  */
 export const fromWireId = (wireId) => {
   const collectionEnd = wireId === undefined ? -1 : wireId.indexOf(WIRE_ID_SEPARATOR);
   const docIdEnd = collectionEnd === -1 ? -1 : wireId.indexOf(WIRE_ID_SEPARATOR, collectionEnd + 1);
 
   if (docIdEnd === -1) {
-    throw `firestore-redux > translation : '${wireId}' is not a valid wire id.`;
+    throw new Error(`firestore-redux > translation : '${wireId}' is not a valid wire id.`);
   }
 
   return {

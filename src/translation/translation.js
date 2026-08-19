@@ -55,11 +55,11 @@ export default class Translation {
    */
   setLanguage(language) {
     if (!this._store) {
-      throw "firestore-redux > translation.setLanguage : firestore-redux is not initialized yet.";
+      throw new Error("firestore-redux > translation.setLanguage : firestore-redux is not initialized yet.");
     }
 
     if (!language || typeof language !== "string") {
-      throw `firestore-redux > translation.setLanguage : language must be a non-empty String. ${language}`;
+      throw new Error(`firestore-redux > translation.setLanguage : language must be a non-empty String. ${language}`);
     }
 
     if (language === translationSelectors.language(this._store.getState())) {
@@ -80,7 +80,7 @@ export default class Translation {
    */
   setSchema(schema) {
     if (!this._store) {
-      throw "firestore-redux > translation.setSchema : firestore-redux is not initialized yet.";
+      throw new Error("firestore-redux > translation.setSchema : firestore-redux is not initialized yet.");
     }
 
     assertValidSchema(schema);
