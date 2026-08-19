@@ -158,7 +158,7 @@ class Query {
    */
   loadNextPage() {
     if (!this._initialQueryLimit) {
-      throw "firestore-redux > loadNextPage: Limit criteria is not provided.";
+      throw new Error("firestore-redux > loadNextPage: Limit criteria is not provided.");
     }
     this.__unsubscribe();
     this._criteria.limit = this._criteria.limit + this._initialQueryLimit;

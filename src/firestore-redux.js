@@ -1,6 +1,10 @@
 import * as _actions from "./redux/actions.js";
 import * as _selectors from "./redux/selectors.js";
 import firestoreReducer from "./redux/reducers.js";
+import * as _translationActions from "./redux/translation/actions.js";
+import * as _translationSelectors from "./redux/translation/selectors.js";
+import translationReducer from "./redux/translation/reducers.js";
+import Translation from "./translation/translation.js";
 import { initializeFirestore } from "firebase/firestore";
 import Query from "./query.js";
 import GetDocById from "./get-doc-by-id.js";
@@ -29,6 +33,12 @@ class FirestoreRedux {
 
     // Default configuration for reauthorize polling.
     this._reauthorizePollingConfig = { timeout: 10000, maxAttempts: 1 };
+
+    /**
+     * Translation capability. Translates document content at read time. See
+     * wiki/translation/README.md.
+     */
+    this.translation = new Translation(this);
   }
 
   /**
@@ -45,10 +55,10 @@ class FirestoreRedux {
    */
   init({ store, firebaseApp, readPollingConfig, reauthorize = () => {}, reauthorizePollingConfig = {} }) {
     if (!store) {
-      throw "firestore-redux : redux store is not provided.";
+      throw new Error("firestore-redux : redux store is not provided.");
     }
     this.store = store;
-    store.addReducers({ firestore: firestoreReducer });
+    store.addReducers({ firestore: firestoreReducer, translations: translationReducer });
     this.db = initializeFirestore(firebaseApp, {
       experimentalAutoDetectLongPolling: true,
       experimentalLongPollingOptions: { timeoutSeconds: 25 },
@@ -69,11 +79,11 @@ class FirestoreRedux {
    */
   query(collection, criteria) {
     if (!this.store || !this.db) {
-      throw "firebase-redux > query : firestore-redux is not initialized yet.";
+      throw new Error("firebase-redux > query : firestore-redux is not initialized yet.");
     }
 
     if (!collection) {
-      throw "firestore-redux > query : collection is not provided";
+      throw new Error("firestore-redux > query : collection is not provided");
     }
 
     const id = (criteria && criteria.id) || selectors.getQueryId({collection, criteria});
@@ -95,15 +105,15 @@ class FirestoreRedux {
    */
   getDocById(collectionPath, documentId, options) {
     if (!this.store || !this.db) {
-      throw "firebase-redux > getDocById : firestore-redux is not initialized yet.";
+      throw new Error("firebase-redux > getDocById : firestore-redux is not initialized yet.");
     }
 
     if (!collectionPath || !documentId) {
-      throw `firestore-redux > getDocById : Collection Path or document Id is not provided. > ${collectionPath} > ${documentId}`;
+      throw new Error(`firestore-redux > getDocById : Collection Path or document Id is not provided. > ${collectionPath} > ${documentId}`);
     }
 
     if (!this.__isValidCollectionPath(collectionPath)) {
-      throw `firestore-redux > getDocById > Collection/Subcollection path is not valid. ${collectionPath}`;
+      throw new Error(`firestore-redux > getDocById > Collection/Subcollection path is not valid. ${collectionPath}`);
     }
 
     const id = (options && options.id) || selectors.getQueryId({collection: collectionPath, criteria: { documentId, once: options && options.once }});
@@ -133,19 +143,19 @@ class FirestoreRedux {
     options = { localWrite: true, remoteWrite: true }
   ) {
     if (!this.store || !this.db) {
-      throw "firebase-redux > save : firestore-redux is not initialized yet.";
+      throw new Error("firebase-redux > save : firestore-redux is not initialized yet.");
     }
 
     if (!collectionPath || isEmpty(docs)) {
-      throw `firestore-redux > save : collection path or documents are not provided. ${collectionPath}, ${docs}`;
+      throw new Error(`firestore-redux > save : collection path or documents are not provided. ${collectionPath}, ${docs}`);
     }
 
     if (!this.__isValidCollectionPath(collectionPath)) {
-      throw `firestore-redux > save > Collection/Subcollection path is not valid. ${collectionPath}`;
+      throw new Error(`firestore-redux > save > Collection/Subcollection path is not valid. ${collectionPath}`);
     }
 
     if (!isObject(docs)) {
-      throw `firestore-redux > save : provided docs is not valid object or array. ${docs}`;
+      throw new Error(`firestore-redux > save : provided docs is not valid object or array. ${docs}`);
     }
 
     const instance = new SaveDocs(this.store, this.db);
@@ -165,15 +175,15 @@ class FirestoreRedux {
     options = { localWrite: true, remoteWrite: true }
   ) {
     if (!this.store || !this.db) {
-      throw "firebase-redux > delete : firestore-redux is not initialized yet.";
+      throw new Error("firebase-redux > delete : firestore-redux is not initialized yet.");
     }
 
     if (!collectionPath || isEmpty(docIds)) {
-      throw `firestore-redux > delete : collection path or document ids are not provided. ${collectionPath}, ${docIds}`;
+      throw new Error(`firestore-redux > delete : collection path or document ids are not provided. ${collectionPath}, ${docIds}`);
     }
 
     if (typeof docIds !== "string" && !isArray(docIds)) {
-      throw `firestore-redux > delete : document ids must be string or array of string. ${docIds}`;
+      throw new Error(`firestore-redux > delete : document ids must be string or array of string. ${docIds}`);
     }
 
     const instance = new DeleteDocs(this.store, this.db);
@@ -234,8 +244,14 @@ class FirestoreRedux {
 }
 
 const firestoreRedux = new FirestoreRedux();
-firestoreRedux.selectors = _selectors;
-firestoreRedux.actions = _actions;
-export const actions = _actions;
-export const selectors = _selectors;
+
+// Translation's actions/selectors are namespaced under `translation` so they never shadow the
+// existing query/document ones. e.g. `firestoreRedux.selectors.translation.language(state)`.
+const _allActions = { ..._actions, translation: _translationActions };
+const _allSelectors = { ..._selectors, translation: _translationSelectors };
+
+firestoreRedux.selectors = _allSelectors;
+firestoreRedux.actions = _allActions;
+export const actions = _allActions;
+export const selectors = _allSelectors;
 export default firestoreRedux;

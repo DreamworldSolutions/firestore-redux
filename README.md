@@ -168,3 +168,4 @@ await firestoreRedux.delete(collectionPath, docIds);
 
 - [Redux State & state transitions](wiki/state.md)
 - [Firestore Observations](wiki/firestore-observations.md)
+- [Translation](wiki/translation/README.md)

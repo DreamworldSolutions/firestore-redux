@@ -1,0 +1,125 @@
+openapi: 3.0.3
+info:
+  title: Translation — Translator (URL form)
+  version: "1.0"
+  description: >
+    Contract a server API must implement, EXACTLY (same param/field names, same request shape for the
+    method used, same response shape — no adaptation happens on the way in or out), to be configured as
+    a Translator via `firestoreRedux.translation.setTranslator(url)` or `setTranslator({ url })` (GET,
+    the default) or `setTranslator({ url, method: 'POST' })` (POST) — see
+    ./user-reference-guide.md#firestorereduxtranslationsettranslator. Both forms are called with
+    `credentials: 'include'`, so the app's existing cookie-based session travels automatically. If your
+    API's shape differs at all, or you need something this contract doesn't cover (custom headers, a
+    non-JSON body, auth beyond `credentials: 'include'`), use the function form of
+    `translation.setTranslator` instead (see ./translator-function-spec.md) and adapt the shape yourself.
+paths:
+  /translate:
+    get:
+      summary: Translate a batch of items into one target language (GET form).
+      description: >
+        Used when `setTranslator` is configured with a plain URL string. Path shown here is
+        illustrative; the actual path is whatever URL is passed to `translation.setTranslator`.
+      parameters:
+        - name: targetLanguage
+          in: query
+          required: true
+          schema:
+            type: string
+          example: hi
+        - name: items
+          in: query
+          required: true
+          description: >
+            JSON-encoded object, keyed by an opaque id the library generates (see
+            architecture.md#chunking-and-wire-addressing for how that id is built).
+          schema:
+            type: string
+          example: '{"a1b2":{"text":"Design the home page","contentType":"PLAIN"},"a1b3":{"text":"<p>New layout</p>","contentType":"HTML"}}'
+      responses:
+        "200":
+          description: Translation results, same keys as the request's `items`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranslateResponse"
+    post:
+      summary: Translate a batch of items into one target language (POST form).
+      description: >
+        Used when `setTranslator` is configured with `{ url, method: 'POST' }`. Path shown here is
+        illustrative; the actual path is whatever URL is passed to `translation.setTranslator`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TranslateRequest"
+      responses:
+        "200":
+          description: Translation results, same keys as the request's `items`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranslateResponse"
+components:
+  schemas:
+    TranslateRequest:
+      type: object
+      required: [targetLanguage, items]
+      properties:
+        targetLanguage:
+          type: string
+        items:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/TranslateItem"
+    TranslateItem:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          description: Source text for this item.
+        contentType:
+          type: string
+          enum: [PLAIN, MARKDOWN, HTML]
+          description: >
+            The schema's declared content type for this field, or absent when the integrator's schema
+            left it undeclared — a capable Translator can auto-detect plain/markdown/HTML/MDX in that
+            case; a simpler one can just treat it as plain text.
+        hints:
+          type: array
+          items:
+            type: string
+          description: >
+            e.g. ["user_name"] — signals this item should be transliterated (rendered in the target
+            script) rather than translated for meaning. Training the Translator to transliterate
+            correctly for a given hint is the Translator's own responsibility.
+    TranslateResponseItem:
+      type: object
+      required: [text, success]
+      properties:
+        text:
+          type: string
+          description: >
+            Translated text. Meaningful only when success is true. Must preserve the source's structure
+            — every HTML tag, link and image destination, mention chip `data-*` attribute, code span and
+            fence, still pointing at what it pointed at before. Reordering tags to suit the target
+            language's grammar is fine; adding, dropping, or re-pointing one is not. The library does
+            not inspect this: a result marked success true is stored exactly as given, so a mangled
+            string reaches the app's renderer intact. When an item can't be translated without breaking
+            its structure, return success false for it and the original is kept.
+        success:
+          type: boolean
+        error:
+          type: string
+          description: Present when success is false.
+    TranslateResponse:
+      type: object
+      required: [targetLanguage, items]
+      properties:
+        targetLanguage:
+          type: string
+        items:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/TranslateResponseItem"
