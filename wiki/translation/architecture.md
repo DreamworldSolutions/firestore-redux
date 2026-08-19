@@ -14,26 +14,30 @@ Two parties, one boundary:
   content type, return translated text, or transliterate it if hinted. It has no awareness of Redux,
   Firestore, activations, or state — it's a stateless text-in/text-out (or text-in/error-out) boundary.
 - **This library** owns everything on the other side of that boundary: deciding which documents and
-  fields need translating, calling the Translator in batches, validating fidelity, storing results,
+  fields need translating, calling the Translator in batches, storing results,
   keeping them in sync as documents change and activations start/stop, and serving them back out
   through the selectors an app already uses.
 
 Nothing about the Translator's own behavior — how well it transliterates a name, whether it detects
 Markdown correctly — is this library's concern; nothing about state management, caching, or runtime
 synchronization is the Translator's concern. See
-[Fidelity, Chunking, and Wire Addressing](#fidelity-chunking-and-wire-addressing) below for the
+[Chunking and Wire Addressing](#chunking-and-wire-addressing) below for the
 specific problems that separation lets this library solve once, internally, instead of every
 integrator solving them ad hoc.
 
-## Fidelity, Chunking, and Wire Addressing
+## Chunking and Wire Addressing
 
 Translating rich content correctly requires solving a few problems, all handled internally — an
 integrator never touches any of this directly:
 
-- **HTML/Markdown fidelity.** Before a translated string is accepted, its tag multiset must match the
-  source (inline tags, mention chips, links). A mismatch — or a translate-call failure — is treated as
-  a failure for that item only; the original is kept, and it's recorded in
+- **Translate-call failures.** A translate-call failure, or an item the Translator reports as failed, is
+  treated as a failure for that item only; the original is kept, and it's recorded in
   [`translation.failedFields`](./selectors-reference.md#firestorereduxselectorstranslationfailedfields).
+  Whether a translated string preserved the source's HTML/Markdown structure is **not** checked here —
+  that is the Translator's own responsibility, stated in
+  [translator-function-spec.md](./translator-function-spec.md#contract-notes) and
+  [translate-api.openapi.yml](./translate-api.openapi.yml). A result marked `success: true` is stored
+  exactly as returned.
 - **Debouncing.** A document's translatable fields aren't re-sent the instant a raw value changes.
   Each document has its own short, fixed quiet window (a few hundred milliseconds); every further change
   to that document resets its window. Only once the window elapses without another change does that
@@ -46,9 +50,10 @@ integrator never touches any of this directly:
   actually starts.
 - **Chunking and concurrency.** Once a document's changes clear debounce (or, for `translation.start`'s
   initial scan and `translation.setLanguage`, immediately — neither of those is a rapid-fire update
-  stream), its translatable fields join batches split newest-relevant-first, capped by item count and
-  character count per request, with a concurrency cap — keeps visible content resolving first without
-  overwhelming the Translator.
+  stream), its translatable fields join the queue, wait out a short collection window so documents
+  arriving around the same moment share a request, then leave in batches split newest-relevant-first,
+  capped by item count and character count per request, with a concurrency cap — keeps visible content
+  resolving first without overwhelming the Translator, and without one request per document.
 - **Wire addressing.** Each item sent to the Translator carries a flat, opaque, echoed-back id — see
   [translator-function-spec.md](./translator-function-spec.md) — built by joining `collection` +
   `docId` + field path (the target language itself travels once, at the request's top level, as
@@ -58,6 +63,36 @@ integrator never touches any of this directly:
   Firestore document ID or field path). Because the separator can never legally appear *within* any part
   being joined, the joined string always splits back apart the same way it was built — it can never be
   misread as a different collection, document, or field name.
+
+### Concrete Limits
+
+The values behind the behaviors above, all exported from
+`src/translation/translation-pipeline.js`:
+
+| Constant | Value | What it bounds |
+| -------- | ----- | -------------- |
+| `DEBOUNCE_WINDOW` | `300`ms | A document's quiet window before its changed fields join a batch |
+| `BATCH_COLLECT_WINDOW` | `300`ms | How long queued items wait for company before a request goes out |
+| `MAX_ITEMS_PER_REQUEST` | `50` | Items in one translate call |
+| `MAX_CHARS_PER_REQUEST` | `20000` | Total `text` characters in one translate call |
+| `MAX_CONCURRENT_REQUESTS` | `3` | Translate calls in flight at once |
+
+`BATCH_COLLECT_WINDOW` is what makes batching across *documents* possible at all. Documents arrive from
+Firestore a few at a time, across separate dispatches, so a queue flushed the instant one document was
+queued would send a request per document however generous the caps above are. Unlike `DEBOUNCE_WINDOW`
+it is not restarted by later arrivals - the wait stays bounded no matter how steadily documents keep
+coming - and a queue already holding `MAX_ITEMS_PER_REQUEST` items skips it entirely, since waiting
+could not add anything to that request.
+
+Measured against a real session translating 110 items: without the window, 7 requests
+(`50, 50, 4, 3, 1, 1, 1`); with it, 4 (`50, 37, 15, 8`). The single-item requests are what it removes.
+
+A single item longer than `MAX_CHARS_PER_REQUEST` is still sent, alone in its own batch, rather than
+being dropped or jamming the queue behind it. Within a batch, items keep the order they were queued
+in; it's the *choice* of which items form the batch that is newest-first, not the order inside it.
+
+A document's fields can span several batches. Its `status` is written once — after the last of them
+comes back — never once per batch.
 
 ## Data Flow
 
@@ -79,7 +114,7 @@ scan loaded documents ──► filterFunction ──►   every document curren
    → batched, sent to the Translator     → copied straight into the clone
              │
              ▼
-   fidelity-checked results
+   results
    merged into docs.$collection.$docId          (state.md#translateddoc)
    success/failure recorded into status.$collection.$docId  (state.md#docstatus)
              │

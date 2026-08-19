@@ -93,9 +93,10 @@ never blanked to `null` — while the failure itself is tracked in
 document's overall [`translation.status`](./selectors-reference.md#firestorereduxselectorstranslationstatus),
 which reports `PARTIAL_FAILURE` rather than masking the failure as success.
 
-For how batching, HTML/Markdown fidelity checking, and the wire addressing between this library and
-your Translator work internally, see
-[architecture.md#fidelity-chunking-and-wire-addressing](./architecture.md#fidelity-chunking-and-wire-addressing).
+For how batching and the wire addressing between this library and your Translator work internally, see
+[architecture.md#chunking-and-wire-addressing](./architecture.md#chunking-and-wire-addressing).
+Preserving a source's HTML/Markdown structure through translation is the Translator's responsibility —
+see [translator-function-spec.md](./translator-function-spec.md#contract-notes).
 
 ## Activations
 

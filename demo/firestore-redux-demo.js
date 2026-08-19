@@ -1,6 +1,7 @@
 import { LitElement, html, css, unsafeCSS } from '@dreamworld/pwa-helpers/lit.js';
 import { connect } from "@dreamworld/pwa-helpers/connect-mixin";
 import cloneDeep from "lodash-es/cloneDeep";
+import forEach from "lodash-es/forEach";
 import { store } from "./store";
 import firestoreRedux from "../src/firestore-redux";
 import { initializeApp } from "firebase/app";
@@ -111,6 +112,30 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
       dw-radio-button {
         margin-left: 8px;
       }
+
+      .translation-table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-top: 16px;
+        font-size: 14px;
+      }
+
+      .translation-table th,
+      .translation-table td {
+        border-bottom: 1px solid lightgray;
+        padding: 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .hint {
+        color: gray;
+        font-style: italic;
+      }
+
+      .switch-container dw-button {
+        margin-right: 8px;
+      }
     `,
   ];
 
@@ -134,6 +159,16 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
      * Query detail provided by the user. e.g {id, requesterId, collection, where, orderBy, startAt, startAfter, endAt, endBefore, limit, once}
      */
     _query: { type: Object },
+
+    /**
+     * `true` while the translation activation is running.
+     */
+    _translating: { type: Boolean },
+
+    /**
+     * Rows shown in the translation table. e.g. [{ docId, original, translated, status }]
+     */
+    _translationRows: { type: Array },
   };
 
   constructor() {
@@ -153,6 +188,11 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     this._deleteCollection = "cards";
     this._deleteLocal = true;
     this._deleteRemote = true;
+
+    this._translationCollection = "cards";
+    this._translationLanguage = "hi";
+    this._translating = false;
+    this._translationRows = [];
   }
 
   firstUpdated(changedProps) {
@@ -172,6 +212,90 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     return html`
       ${this._readByQueryTemplate} ${this._readByDocTemplate}
       ${this._cancelQueryTemplate} ${this._saveDeleteTemplate}
+      ${this._translationTemplate}
+    `;
+  }
+
+  /**
+   * Minimal, complete example of the translation capability: configure a Translator, set a
+   * language, start an activation. Reads never change - `selectors.doc` returns the translation
+   * once it's ready. See wiki/translation/README.md.
+   */
+  get _translationTemplate() {
+    return html`
+      <div class="request-query_container card">
+        <h6 class="headline6">Translation</h6>
+        <p>
+          Three calls is the whole integration. Nothing changes at the read site &mdash;
+          <code>selectors.doc</code> returns the translated document once it's ready, the original
+          until then.
+        </p>
+        <pre>
+firestoreRedux.translation.setTranslator(translateFn);   // your translate API
+firestoreRedux.translation.setLanguage('${this._translationLanguage}');
+firestoreRedux.translation.start({
+  id: 'demo',
+  filterFunction: (doc, collection) => collection === '${this._translationCollection}',
+});</pre
+        >
+
+        <div class="row">
+          <dw-input
+            dense
+            label="Collection"
+            .value=${this._translationCollection}
+            @value-changed=${(e) => {
+              this._translationCollection = e.detail.value;
+            }}
+          ></dw-input>
+          <dw-input
+            dense
+            label="Language"
+            placeholder="e.g. hi, gu, mr, fr"
+            .value=${this._translationLanguage}
+            @value-changed=${(e) => {
+              this._translationLanguage = e.detail.value;
+            }}
+          ></dw-input>
+        </div>
+
+        <div class="switch-container row">
+          <dw-button outlined @click=${this._addSampleDocuments}
+            >Add sample documents</dw-button
+          >
+          <dw-button raised ?disabled=${this._translating} @click=${this._startTranslating}
+            >Start translating</dw-button
+          >
+          <dw-button outlined ?disabled=${!this._translating} @click=${this._stopTranslating}
+            >Stop</dw-button
+          >
+        </div>
+
+        ${this._translationRows.length
+          ? html`
+              <table class="translation-table">
+                <tr>
+                  <th>Document</th>
+                  <th>Original (selectors.originalDoc)</th>
+                  <th>Translated (selectors.doc)</th>
+                  <th>Status</th>
+                </tr>
+                ${this._translationRows.map(
+                  (row) => html`
+                    <tr>
+                      <td>${row.docId}</td>
+                      <td>${row.original}</td>
+                      <td>${row.translated}</td>
+                      <td>${row.status}</td>
+                    </tr>
+                  `
+                )}
+              </table>
+            `
+          : html`<p class="hint">
+              Add the sample documents (or run a query above), then start translating.
+            </p>`}
+      </div>
     `;
   }
 
@@ -622,6 +746,101 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
   }
 
   /**
+   * Writes two documents into redux locally, so the translation example has something to work on
+   * without a Firestore project. A real app's documents arrive from a query instead.
+   */
+  _addSampleDocuments() {
+    store.dispatch(
+      firestoreRedux.actions.save(
+        this._translationCollection,
+        [
+          {
+            id: "sample-1",
+            title: "Design the home page",
+            description: "New layout for the customer portal",
+            columnType: "IN_PROGRESS",
+            dueDate: "2026-08-11",
+          },
+          {
+            id: "sample-2",
+            title: "Review the launch checklist",
+            description: "Confirm every item before Friday",
+            columnType: "DONE",
+            dueDate: "2026-08-14",
+          },
+        ],
+        { localWrite: true, remoteWrite: false }
+      )
+    );
+    this._refreshTranslationRows();
+  }
+
+  /**
+   * The three integrator calls. The Translator here is a free public API wired through the function
+   * form - swap it for your own endpoint, or pass a URL string to use the URL form instead.
+   */
+  _startTranslating() {
+    if (!this._translationLanguage) {
+      alert("Please enter a target language.");
+      return;
+    }
+
+    firestoreRedux.translation.setTranslator(async ({ targetLanguage, items }) => {
+      const results = await Promise.all(
+        Object.entries(items).map(async ([id, item]) => {
+          const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
+            item.text
+          )}&langpair=en|${targetLanguage}`;
+          try {
+            const data = await (await fetch(url)).json();
+            return data.responseStatus === 200
+              ? [id, { text: data.responseData.translatedText, success: true }]
+              : [id, { text: item.text, success: false, error: String(data.responseDetails) }];
+          } catch (error) {
+            return [id, { text: item.text, success: false, error: String(error) }];
+          }
+        })
+      );
+      return { targetLanguage, items: Object.fromEntries(results) };
+    });
+
+    firestoreRedux.translation.setLanguage(this._translationLanguage);
+    firestoreRedux.translation.start({
+      id: "demo",
+      filterFunction: (doc, collection) => collection === this._translationCollection,
+    });
+
+    this._translating = true;
+    this._refreshTranslationRows();
+  }
+
+  _stopTranslating() {
+    firestoreRedux.translation.stop("demo");
+    this._translating = false;
+    this._refreshTranslationRows();
+  }
+
+  /**
+   * Rebuilds the table from the selectors, so it shows exactly what an app would read.
+   */
+  _refreshTranslationRows() {
+    const state = store.getState();
+    const rows = [];
+    forEach(
+      firestoreRedux.selectors.collection(state, this._translationCollection),
+      (document, docId) => {
+        rows.push({
+          docId,
+          original: firestoreRedux.selectors.originalDoc(state, this._translationCollection, docId).title,
+          translated: firestoreRedux.selectors.doc(state, this._translationCollection, docId).title,
+          status: firestoreRedux.selectors.translation.status(state, this._translationCollection, docId),
+        });
+      }
+    );
+    this._translationRows = rows;
+  }
+
+  /**
    * @param {String} str String to be checked for valid Object string
    * @returns {Boolean}
    */
@@ -642,6 +861,10 @@ export class FirestoreReduxDemo extends connect(store)(LitElement) {
     return this.__isJSONString(str) && Array.isArray(JSON.parse(str));
   }
 
-  stateChanged(state) {}
+  stateChanged(state) {
+    if (this._translationRows.length) {
+      this._refreshTranslationRows();
+    }
+  }
 }
 customElements.define("firestore-redux-demo", FirestoreReduxDemo);

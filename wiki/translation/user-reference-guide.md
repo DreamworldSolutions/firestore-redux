@@ -64,6 +64,17 @@ firestoreRedux.translation.setTranslator(async ({ targetLanguage, items }) => {
 
 - Nothing.
 
+##### Errors
+
+- Throws immediately if the argument isn't one of the three accepted forms, or if `method` is
+  anything other than `'GET'`/`'POST'`.
+- A non-2xx response from either URL form fails that batch's items — each keeps its original value
+  and is recorded in
+  [`translation.failedFields`](./selectors-reference.md#firestorereduxselectorstranslationfailedfields),
+  exactly as a per-item `success: false` would. Other in-flight batches are unaffected.
+- The `GET` form appends its params to whatever the configured URL already carries, so a URL with an
+  existing query string keeps it.
+
 ## `firestoreRedux.translation.setLanguage`
 
 Sets the current target language — the other required integrator input, alongside
@@ -87,6 +98,9 @@ firestoreRedux.translation.setLanguage('hi');
 ##### returns
 
 - Nothing.
+
+Throws if `language` is missing, empty, or not a String. Calling it again with the value it already
+holds is a no-op — no re-translation pass is triggered for a language that didn't actually change.
 
 Calling this again with a different value re-translates every document currently covered by any active
 activation — see [state.md#behaviors](./state.md#behaviors) item 6. It does not need to be called
@@ -125,6 +139,11 @@ firestoreRedux.translation.start({
 ##### returns
 
 - Nothing.
+
+Calling `start` again with an `id` that is already started doesn't fail — it replaces that
+activation's scope, exactly as [`translation.update`](#firestorereduxtranslationupdate) would, and logs a
+warning so an accidental double-start doesn't go unnoticed. Use `translation.update` when changing scope
+is what you meant.
 
 Multiple activations can coexist under different `id`s, covering different (or overlapping) scopes —
 see [state.md#behaviors](./state.md#behaviors). All of them translate into the one current language;
@@ -177,6 +196,13 @@ firestoreRedux.translation.stop('session');
 ##### returns
 
 - Nothing.
+
+Stopping an `id` that isn't currently started — never started, or already stopped — does nothing and
+doesn't throw. Teardown tends to run more than once (a component disconnecting, a cancelled saga, an
+error path), so `stop` is deliberately idempotent. Note this is the opposite of
+[`translation.update`](#firestorereduxtranslationupdate), which rejects an unknown `id`: stopping
+something that isn't running has already reached the intended end state, while updating something that
+isn't there can't do what the caller meant.
 
 See [Behaviors](./state.md#behaviors) (item 5) — a document this activation translated isn't removed
 if some other still-active activation still matches it.

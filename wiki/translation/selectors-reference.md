@@ -6,10 +6,34 @@ get started, and [state.md](./state.md) for the state shape these read from.
 ## Reading Translated Content
 
 No new selectors are needed for the common case — `firestoreRedux.selectors.doc`, `docsByQuery`,
-`allDocs`, etc. transparently return the translated document once available (a full clone, in the
-current language — see [state.md#translateddoc](./state.md#translateddoc)), the original otherwise,
-for any document matching a live activation. This is the **document translation selector**: you don't
-call anything new, your existing read calls just start returning translated content once it's ready.
+`docsByQueryResult`, `allDocs`, and `collection` transparently return the translated document once
+available (a full clone, in the current language — see
+[state.md#translateddoc](./state.md#translateddoc)), the original otherwise, for any document
+matching a live activation. This is the **document translation selector**: you don't call anything
+new, your existing read calls just start returning translated content once it's ready.
+
+## `firestoreRedux.selectors.originalDoc`
+
+Gets a document exactly as stored, in the language it was authored in — never the translated clone.
+
+```JS
+const original = firestoreRedux.selectors.originalDoc(state, collection, docId);
+```
+
+Reach for this wherever the **source** content is what matters rather than what the viewer reads.
+The important case is editing: if an editor is populated from `doc` while a translation is showing,
+saving writes the *translation* back over the original, destroying the authored content for everyone
+else. Populate editors from `originalDoc`, or don't offer in-place editing of translated content.
+
+##### Arguments
+
+- `state (Object)` Redux state.
+- `collection (String)` Collection ID.
+- `docId (String)` Document Id.
+
+##### returns
+
+- `(Object | undefined)` The stored document, or `undefined` if it isn't loaded. Never a translation.
 
 ## `firestoreRedux.selectors.translation.language`
 

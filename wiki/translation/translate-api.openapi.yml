@@ -31,7 +31,7 @@ paths:
           required: true
           description: >
             JSON-encoded object, keyed by an opaque id the library generates (see
-            architecture.md#fidelity-chunking-and-wire-addressing for how that id is built).
+            architecture.md#chunking-and-wire-addressing for how that id is built).
           schema:
             type: string
           example: '{"a1b2":{"text":"Design the home page","contentType":"PLAIN"},"a1b3":{"text":"<p>New layout</p>","contentType":"HTML"}}'
@@ -100,7 +100,14 @@ components:
       properties:
         text:
           type: string
-          description: Translated text. Meaningful only when success is true.
+          description: >
+            Translated text. Meaningful only when success is true. Must preserve the source's structure
+            — every HTML tag, link and image destination, mention chip `data-*` attribute, code span and
+            fence, still pointing at what it pointed at before. Reordering tags to suit the target
+            language's grammar is fine; adding, dropping, or re-pointing one is not. The library does
+            not inspect this: a result marked success true is stored exactly as given, so a mangled
+            string reaches the app's renderer intact. When an item can't be translated without breaking
+            its structure, return success false for it and the original is kept.
         success:
           type: boolean
         error:
