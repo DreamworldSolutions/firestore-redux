@@ -6,10 +6,10 @@
  * `firestore.docs` is keyed by the last path segment, so `users/u1/user-preferences` is stored as
  * `user-preferences`.
  *
- * Field paths are a weaker guarantee, not a Firestore rule - Firestore does permit `/` inside a field
- * name. It holds here because paths are built from ordinary document keys, and it doesn't need to
- * hold anyway: both parsers below locate the separators by position from the left and return the
- * final part whole, so only the two leading parts must be separator-free.
+ * Only `fromDocumentKey` ever splits one of these strings back apart, and it splits on the first
+ * separator only - so the collection ID is the sole part that has to be separator-free. Document IDs
+ * and field paths come back whole, and a wire id is never parsed at all: the pipeline matches a
+ * response by rebuilding the same key from the batch item it already holds.
  */
 export const WIRE_ID_SEPARATOR = "/";
 
@@ -48,27 +48,5 @@ export const fromDocumentKey = (documentKey) => {
   return {
     collection: documentKey.slice(0, collectionEnd),
     docId: documentKey.slice(collectionEnd + 1),
-  };
-};
-
-/**
- * Splits a wire id back into the three parts it was built from. Splits on the first two separators
- * only, so a field path is returned whole even if it happens to contain one.
- * @param {String} wireId Wire id, as built by `toWireId`.
- * @returns {Object} `{ collection, docId, fieldPath }`
- * @throws {Error} When the id doesn't carry all three parts.
- */
-export const fromWireId = (wireId) => {
-  const collectionEnd = wireId === undefined ? -1 : wireId.indexOf(WIRE_ID_SEPARATOR);
-  const docIdEnd = collectionEnd === -1 ? -1 : wireId.indexOf(WIRE_ID_SEPARATOR, collectionEnd + 1);
-
-  if (docIdEnd === -1) {
-    throw new Error(`firestore-redux > translation : '${wireId}' is not a valid wire id.`);
-  }
-
-  return {
-    collection: wireId.slice(0, collectionEnd),
-    docId: wireId.slice(collectionEnd + 1, docIdEnd),
-    fieldPath: wireId.slice(docIdEnd + 1),
   };
 };
