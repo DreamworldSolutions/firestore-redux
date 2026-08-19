@@ -50,9 +50,10 @@ integrator never touches any of this directly:
   actually starts.
 - **Chunking and concurrency.** Once a document's changes clear debounce (or, for `translation.start`'s
   initial scan and `translation.setLanguage`, immediately — neither of those is a rapid-fire update
-  stream), its translatable fields join batches split newest-relevant-first, capped by item count and
-  character count per request, with a concurrency cap — keeps visible content resolving first without
-  overwhelming the Translator.
+  stream), its translatable fields join the queue, wait out a short collection window so documents
+  arriving around the same moment share a request, then leave in batches split newest-relevant-first,
+  capped by item count and character count per request, with a concurrency cap — keeps visible content
+  resolving first without overwhelming the Translator, and without one request per document.
 - **Wire addressing.** Each item sent to the Translator carries a flat, opaque, echoed-back id — see
   [translator-function-spec.md](./translator-function-spec.md) — built by joining `collection` +
   `docId` + field path (the target language itself travels once, at the request's top level, as
@@ -65,15 +66,26 @@ integrator never touches any of this directly:
 
 ### Concrete Limits
 
-The values behind the four behaviors above, all exported from
+The values behind the behaviors above, all exported from
 `src/translation/translation-pipeline.js`:
 
 | Constant | Value | What it bounds |
 | -------- | ----- | -------------- |
 | `DEBOUNCE_WINDOW` | `300`ms | A document's quiet window before its changed fields join a batch |
+| `BATCH_COLLECT_WINDOW` | `300`ms | How long queued items wait for company before a request goes out |
 | `MAX_ITEMS_PER_REQUEST` | `50` | Items in one translate call |
 | `MAX_CHARS_PER_REQUEST` | `20000` | Total `text` characters in one translate call |
 | `MAX_CONCURRENT_REQUESTS` | `3` | Translate calls in flight at once |
+
+`BATCH_COLLECT_WINDOW` is what makes batching across *documents* possible at all. Documents arrive from
+Firestore a few at a time, across separate dispatches, so a queue flushed the instant one document was
+queued would send a request per document however generous the caps above are. Unlike `DEBOUNCE_WINDOW`
+it is not restarted by later arrivals - the wait stays bounded no matter how steadily documents keep
+coming - and a queue already holding `MAX_ITEMS_PER_REQUEST` items skips it entirely, since waiting
+could not add anything to that request.
+
+Measured against a real session translating 110 items: without the window, 7 requests
+(`50, 50, 4, 3, 1, 1, 1`); with it, 4 (`50, 37, 15, 8`). The single-item requests are what it removes.
 
 A single item longer than `MAX_CHARS_PER_REQUEST` is still sent, alone in its own batch, rather than
 being dropped or jamming the queue behind it. Within a batch, items keep the order they were queued

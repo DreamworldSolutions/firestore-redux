@@ -23,6 +23,16 @@ export const MAX_CHARS_PER_REQUEST = 20000;
 export const MAX_CONCURRENT_REQUESTS = 3;
 
 /**
+ * How long queued items wait for company before a request goes out.
+ *
+ * Documents arrive from Firestore a few at a time, across separate dispatches, so sending the moment
+ * one document is queued produces a request per document. This window lets the ones arriving around
+ * the same moment share a request instead. It is not a debounce: it never restarts, so the wait is
+ * bounded no matter how steadily documents keep arriving.
+ */
+export const BATCH_COLLECT_WINDOW = 300;
+
+/**
  * Everything between "these fields need translating" and "the result is in redux": debouncing,
  * batching, calling the Translator, and recording success or failure per field.
  *
@@ -46,6 +56,8 @@ export default class TranslationPipeline {
     this._sequence = 0;
 
     this._inFlightCount = 0;
+    // Set while a collection window is open; see `_scheduleBatchSend`.
+    this._batchSendTimer = undefined;
 
     // docKey -> { attempted, remaining: Set<fieldPath>, failed: [] } for the attempt in progress.
     // A document's fields can span several batches, so its status is only written once the last of
@@ -141,6 +153,33 @@ export default class TranslationPipeline {
       actions._setDocStatus(collection, docId, { status: Status.IN_PROGRESS, failedFields: [] })
     );
 
+    this._scheduleBatchSend();
+  }
+
+  /**
+   * Opens a collection window, so items queued moments apart travel together instead of one request
+   * per document. Already-open windows are left alone - the wait is bounded, never restarted.
+   *
+   * A queue that already holds a full request's worth has nothing to gain by waiting, so it goes now.
+   * @private
+   */
+  _scheduleBatchSend() {
+    if (this._queuedItems.length >= MAX_ITEMS_PER_REQUEST) {
+      this._flushBatchSend();
+      return;
+    }
+
+    if (this._batchSendTimer !== undefined) {
+      return;
+    }
+
+    this._batchSendTimer = setTimeout(() => this._flushBatchSend(), BATCH_COLLECT_WINDOW);
+  }
+
+  /** Closes any open collection window and sends what has gathered. @private */
+  _flushBatchSend() {
+    clearTimeout(this._batchSendTimer);
+    this._batchSendTimer = undefined;
     this._sendQueuedBatches();
   }
 
