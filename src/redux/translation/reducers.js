@@ -64,6 +64,35 @@ const translationReducer = (state = INITIAL_STATE, action) => {
         { status: action.status, failedFields: action.failedFields || [] }
       );
 
+    case actions.APPLY_TRANSLATIONS: {
+      let newState = state;
+      forEach(action.entries, (entry) => {
+        const docPath = `docs.${entry.collection}.${entry.docId}`;
+
+        if (entry.doc !== undefined) {
+          newState = ReduxUtils.replace(newState, docPath, entry.doc);
+        }
+
+        if (!isEmpty(entry.fields)) {
+          // Same rule as SET_TRANSLATED_FIELDS: never resurrect a clone that has been removed.
+          const clone = get(newState, docPath);
+          if (clone) {
+            const newClone = cloneDeep(clone);
+            forEach(entry.fields, (value, fieldPath) => set(newClone, fieldPath, value));
+            newState = ReduxUtils.replace(newState, docPath, newClone);
+          }
+        }
+
+        if (entry.status !== undefined) {
+          newState = ReduxUtils.replace(newState, `status.${entry.collection}.${entry.docId}`, {
+            status: entry.status,
+            failedFields: entry.failedFields || [],
+          });
+        }
+      });
+      return newState;
+    }
+
     case actions.REMOVE_DOC_TRANSLATION:
       state = removeDocEntry(state, "docs", action.collection, action.docId);
       return removeDocEntry(state, "status", action.collection, action.docId);

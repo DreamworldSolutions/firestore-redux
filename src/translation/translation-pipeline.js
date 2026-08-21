@@ -58,6 +58,10 @@ export default class TranslationPipeline {
     this._inFlightCount = 0;
     // Set while a collection window is open; see `_scheduleBatchSend`.
     this._batchSendTimer = undefined;
+    // docKey -> { collection, docId, doc, fields, status, failedFields } waiting to be written to
+    // redux when the window closes. Buffered rather than dispatched per document: every dispatch
+    // notifies every store subscriber, so per-document writes re-render the whole app per document.
+    this._pendingWrites = {};
 
     // docKey -> { attempted, remaining: Set<fieldPath>, failed: [] } for the attempt in progress.
     // A document's fields can span several batches, so its status is only written once the last of
@@ -118,7 +122,7 @@ export default class TranslationPipeline {
    */
   _queueFieldsForTranslation(collection, docId, fields) {
     const docKey = this._documentKey(collection, docId);
-    this._ensureDocumentClone(collection, docId);
+    const pending = this._pendingWriteFor(collection, docId);
 
     // `outcomes` holds one entry per field - `null` while in flight, `true`/`false` once settled -
     // so a field queued again mid-attempt is still one field, not two. A running tally can't do
@@ -146,12 +150,12 @@ export default class TranslationPipeline {
       });
     });
 
-    // The call starts now, so any stale translation of these fields goes now too - back to the
-    // source value, never to null. A field whose call then fails is already showing what it should.
-    this._store.dispatch(actions._setTranslatedFields(collection, docId, sourceValues));
-    this._store.dispatch(
-      actions._setDocStatus(collection, docId, { status: Status.IN_PROGRESS, failedFields: [] })
-    );
+    // The call starts when the window closes, so any stale translation of these fields goes then
+    // too - back to the source value, never to null. A field whose call then fails is already
+    // showing what it should.
+    Object.assign(pending.fields, sourceValues);
+    pending.status = Status.IN_PROGRESS;
+    pending.failedFields = [];
 
     this._scheduleBatchSend();
   }
@@ -164,7 +168,14 @@ export default class TranslationPipeline {
    * @private
    */
   _scheduleBatchSend() {
-    if (this._queuedItems.length >= MAX_ITEMS_PER_REQUEST) {
+    // A full request's worth has nothing to gain by waiting - but only while a slot is free to carry
+    // it. Once every slot is busy nothing can leave anyway, so skipping the window would just flush
+    // one document at a time: a scan keeps the queue permanently above the cap, and every queued
+    // document would become its own redux write.
+    if (
+      this._queuedItems.length >= MAX_ITEMS_PER_REQUEST &&
+      this._inFlightCount < MAX_CONCURRENT_REQUESTS
+    ) {
       this._flushBatchSend();
       return;
     }
@@ -197,25 +208,72 @@ export default class TranslationPipeline {
     delete this._debounceTimers[docKey];
     delete this._debouncedChanges[docKey];
     delete this._attempts[docKey];
+    delete this._pendingWrites[docKey];
 
     this._queuedItems = this._queuedItems.filter((item) => item.docKey !== docKey);
   }
 
   /**
+   * The buffered write for one document, created on first use.
+   *
    * A translated document is a full clone of the original, so translated values have somewhere to
-   * land. Creating it on the first attempt keeps every field the document already has readable while
-   * translation is still in flight.
+   * land; seeding it here keeps every field the document already has readable while translation is
+   * still in flight.
    * @private
    */
-  _ensureDocumentClone(collection, docId) {
-    const state = this._store.getState();
-    if (get(state, `translations.docs.${collection}.${docId}`)) {
-      return;
+  _pendingWriteFor(collection, docId) {
+    const docKey = this._documentKey(collection, docId);
+    const existing = this._pendingWrites[docKey];
+    if (existing) {
+      return existing;
     }
 
-    const original = firestoreSelectors.originalDoc(state, collection, docId);
-    if (original) {
-      this._store.dispatch(actions._setTranslatedDoc(collection, docId, cloneDeep(original)));
+    const pending = { collection, docId, fields: {} };
+    const state = this._store.getState();
+    if (!get(state, `translations.docs.${collection}.${docId}`)) {
+      const original = firestoreSelectors.originalDoc(state, collection, docId);
+      if (original) {
+        pending.doc = cloneDeep(original);
+      }
+    }
+
+    this._pendingWrites[docKey] = pending;
+    return pending;
+  }
+
+  /**
+   * Buffers a document's translated clone for the next batched write - used when a document is first
+   * matched, and again when an update rebuilds its clone.
+   * @param {String} collection Collection / Subcollection ID.
+   * @param {String} docId Document Id.
+   * @param {Object} doc The clone to store.
+   */
+  writeDocumentClone(collection, docId, doc) {
+    this._pendingWriteFor(collection, docId).doc = doc;
+    this._scheduleBatchSend();
+  }
+
+  /**
+   * Buffers the outcome of a document that had nothing to translate - no field was attempted, so
+   * nothing can fail.
+   * @param {String} collection Collection / Subcollection ID.
+   * @param {String} docId Document Id.
+   * @param {String} status A `Status` member.
+   */
+  writeSettledStatus(collection, docId, status) {
+    const pending = this._pendingWriteFor(collection, docId);
+    pending.status = status;
+    pending.failedFields = [];
+    this._scheduleBatchSend();
+  }
+
+  /** Writes every buffered document in one dispatch, so subscribers run once. @private */
+  _flushPendingWrites() {
+    const entries = Object.values(this._pendingWrites);
+    this._pendingWrites = {};
+
+    if (entries.length) {
+      this._store.dispatch(actions._applyTranslations(entries));
     }
   }
 
@@ -224,6 +282,12 @@ export default class TranslationPipeline {
    * @private
    */
   _sendQueuedBatches() {
+    // Buffered writes must land before anything is sent. A response settles the documents it covers,
+    // and a write still sitting in the buffer would be flushed afterwards - overwriting that result
+    // with the IN_PROGRESS the document had before the call. Every path that sends comes through
+    // here, including the one that fires when a slot frees, so this is the single safe place.
+    this._flushPendingWrites();
+
     while (this._inFlightCount < MAX_CONCURRENT_REQUESTS && this._queuedItems.length) {
       this._sendBatch(this._takeNextBatch());
     }
@@ -327,14 +391,29 @@ export default class TranslationPipeline {
       }
     });
 
+    // One dispatch for the whole response, however many documents it spans.
+    const entries = [];
     forEach(byDoc, (group) => {
+      const entry = { collection: group.collection, docId: group.docId };
+
       if (!isEmpty(group.translated)) {
-        this._store.dispatch(
-          actions._setTranslatedFields(group.collection, group.docId, group.translated)
-        );
+        entry.fields = group.translated;
       }
-      this._settleDocumentAttempt(group);
+
+      const settled = this._settleDocumentAttempt(group);
+      if (settled) {
+        entry.status = settled.status;
+        entry.failedFields = settled.failedFields;
+      }
+
+      if (entry.fields || entry.status !== undefined) {
+        entries.push(entry);
+      }
     });
+
+    if (entries.length) {
+      this._store.dispatch(actions._applyTranslations(entries));
+    }
   }
 
   /**
@@ -381,7 +460,7 @@ export default class TranslationPipeline {
       ? Status.FAILED
       : Status.PARTIAL_FAILURE;
 
-    this._store.dispatch(actions._setDocStatus(collection, docId, { status, failedFields }));
+    return { status, failedFields };
   }
 
   /**

@@ -6,6 +6,7 @@ export const SET_TRANSLATED_DOC = "FIRESTORE_REDUX_TRANSLATION_SET_TRANSLATED_DO
 export const SET_TRANSLATED_FIELDS = "FIRESTORE_REDUX_TRANSLATION_SET_TRANSLATED_FIELDS";
 export const SET_DOC_STATUS = "FIRESTORE_REDUX_TRANSLATION_SET_DOC_STATUS";
 export const REMOVE_DOC_TRANSLATION = "FIRESTORE_REDUX_TRANSLATION_REMOVE_DOC_TRANSLATION";
+export const APPLY_TRANSLATIONS = "FIRESTORE_REDUX_TRANSLATION_APPLY_TRANSLATIONS";
 
 /**
  * Replaces the whole schema in one call. A schema is optional - without one, only string fields
@@ -123,5 +124,24 @@ export const _removeDocTranslation = (collection, docId) => {
     type: REMOVE_DOC_TRANSLATION,
     collection,
     docId,
+  };
+};
+
+/**
+ * Applies many documents' translation results in a single dispatch.
+ *
+ * The per-document actions above each notify every store subscriber, and a translate response covers
+ * up to `MAX_ITEMS_PER_REQUEST` items spanning as many documents - dispatching per document made the
+ * app re-render once per document instead of once per response. On a large board that is the
+ * difference between a responsive page and a frozen one.
+ *
+ * @param {Array} entries `[{ collection, docId, doc, fields, status, failedFields }]`. Every field
+ *  past `docId` is optional: `doc` seeds the translated clone, `fields` merges values into it, and
+ *  `status`/`failedFields` record the outcome. Applied in the order given.
+ */
+export const _applyTranslations = (entries) => {
+  return {
+    type: APPLY_TRANSLATIONS,
+    entries,
   };
 };

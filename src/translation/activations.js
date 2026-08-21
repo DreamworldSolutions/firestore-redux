@@ -254,8 +254,10 @@ export default class Activations {
       return;
     }
 
-    // Non-translatable fields are readable immediately; translatable ones fill in as results arrive.
-    this._store.dispatch(actions._setTranslatedDoc(collection, docId, cloneDeep(document)));
+    // Non-translatable fields are readable as soon as the clone lands; translatable ones fill in as
+    // results arrive. Buffered rather than dispatched here: a scan matches every loaded document at
+    // once, and a dispatch per document re-renders the whole app per document.
+    this._translation._pipeline.writeDocumentClone(collection, docId, cloneDeep(document));
 
     const fields = translatableFields(
       document,
@@ -265,9 +267,7 @@ export default class Activations {
 
     if (!fields.length) {
       // Nothing to attempt, so nothing can fail.
-      this._store.dispatch(
-        actions._setDocStatus(collection, docId, { status: Status.SUCCESS, failedFields: [] })
-      );
+      this._translation._pipeline.writeSettledStatus(collection, docId, Status.SUCCESS);
       return;
     }
 
@@ -340,7 +340,7 @@ export default class Activations {
     });
 
     if (!isEqual(updatedClone, existingClone)) {
-      this._store.dispatch(actions._setTranslatedDoc(collection, docId, updatedClone));
+      this._translation._pipeline.writeDocumentClone(collection, docId, updatedClone);
     }
 
     const changedFields = currentFields.filter(
