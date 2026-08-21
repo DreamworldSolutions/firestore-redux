@@ -93,9 +93,14 @@ const translationReducer = (state = INITIAL_STATE, action) => {
       return newState;
     }
 
-    case actions.REMOVE_DOC_TRANSLATION:
-      state = removeDocEntry(state, "docs", action.collection, action.docId);
-      return removeDocEntry(state, "status", action.collection, action.docId);
+    case actions.REMOVE_DOC_TRANSLATIONS: {
+      let newState = state;
+      forEach(action.docs, (doc) => {
+        newState = removeDocEntry(newState, "docs", doc.collection, doc.docId);
+        newState = removeDocEntry(newState, "status", doc.collection, doc.docId);
+      });
+      return newState;
+    }
 
     default:
       return state;

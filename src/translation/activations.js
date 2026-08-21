@@ -119,9 +119,12 @@ export default class Activations {
     delete this._filterFunctions[id];
     this._store.dispatch(actions._removeActivation(id));
 
-    this._index
-      .removeActivation(id)
-      .forEach((documentKey) => this._removeUnmatchedTranslation(documentKey));
+    // One dispatch for every document this activation covered. A large board covers thousands, and
+    // a dispatch each would re-render the whole app per document - that is what made stopping a
+    // "View As" session look frozen.
+    this._removeTranslations(
+      this._index.removeActivation(id).map((documentKey) => this._removeUnmatchedTranslation(documentKey))
+    );
 
     if (!Object.keys(this._filterFunctions).length) {
       this._stopWatchingRetrievedDocuments();
@@ -189,13 +192,15 @@ export default class Activations {
       });
     });
 
+    const unmatched = [];
     previousDocumentKeys.forEach((documentKey) => {
       if (matchingDocumentKeys.has(documentKey)) {
         return;
       }
       this._index.removeMatch(activationId, documentKey);
-      this._removeUnmatchedTranslation(documentKey);
+      unmatched.push(this._removeUnmatchedTranslation(documentKey));
     });
+    this._removeTranslations(unmatched);
 
     matchingDocumentKeys.forEach((documentKey) => {
       if (previousDocumentKeys.has(documentKey)) {
@@ -364,11 +369,10 @@ export default class Activations {
    */
   _removeUnmatchedTranslation(documentKey) {
     if (this._index.hasAnyActivation(documentKey)) {
-      return;
+      return undefined;
     }
 
-    const { collection, docId } = fromDocumentKey(documentKey);
-    this._store.dispatch(actions._removeDocTranslation(collection, docId));
+    return fromDocumentKey(documentKey);
   }
 
   /**
@@ -418,6 +422,7 @@ export default class Activations {
 
     const previousDocumentsByCollection = this._previousDocumentsByCollection || {};
     this._previousDocumentsByCollection = documentsByCollection;
+    const forgotten = [];
 
     forEach(documentsByCollection, (documents, collection) => {
       const previousDocuments = previousDocumentsByCollection[collection] || {};
@@ -433,16 +438,31 @@ export default class Activations {
 
       forEach(previousDocuments, (document, docId) => {
         if (documents[docId] === undefined) {
-          this._forgetDocument(collection, docId);
+          forgotten.push(this._forgetDocument(collection, docId));
         }
       });
     });
 
     forEach(previousDocumentsByCollection, (documents, collection) => {
       if (documentsByCollection[collection] === undefined) {
-        forEach(documents, (document, docId) => this._forgetDocument(collection, docId));
+        forEach(documents, (document, docId) => forgotten.push(this._forgetDocument(collection, docId)));
       }
     });
+
+    this._removeTranslations(forgotten);
+  }
+
+  /**
+   * Removes many documents' translations in one dispatch, ignoring the entries callers reported as
+   * "nothing to remove".
+   * @param {Array} docs Entries from `_forgetDocument`/`_removeUnmatchedTranslation`, some undefined.
+   * @private
+   */
+  _removeTranslations(docs) {
+    const removals = docs.filter(Boolean);
+    if (removals.length) {
+      this._store.dispatch(actions._removeDocTranslations(removals));
+    }
   }
 
   /**
@@ -458,7 +478,7 @@ export default class Activations {
    */
   _reconcileDocumentMatches(collection, docId, document, previousDocument) {
     if (!document) {
-      this._forgetDocument(collection, docId);
+      this._removeTranslations([this._forgetDocument(collection, docId)]);
       return;
     }
 
@@ -475,7 +495,7 @@ export default class Activations {
 
     if (!this._index.hasAnyActivation(documentKey)) {
       if (previousActivationIds.length) {
-        this._removeUnmatchedTranslation(documentKey);
+        this._removeTranslations([this._removeUnmatchedTranslation(documentKey)]);
       }
       return;
     }
@@ -493,9 +513,8 @@ export default class Activations {
    * @private
    */
   _forgetDocument(collection, docId) {
-    const documentKey = toDocumentKey(collection, docId);
-    this._index.removeDocument(documentKey);
-    this._store.dispatch(actions._removeDocTranslation(collection, docId));
+    this._index.removeDocument(toDocumentKey(collection, docId));
+    return { collection, docId };
   }
 
   /** @returns {Object} `firestore.docs`, keyed by collection. @private */

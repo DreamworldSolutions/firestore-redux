@@ -5,8 +5,8 @@ export const REMOVE_ACTIVATION = "FIRESTORE_REDUX_TRANSLATION_REMOVE_ACTIVATION"
 export const SET_TRANSLATED_DOC = "FIRESTORE_REDUX_TRANSLATION_SET_TRANSLATED_DOC";
 export const SET_TRANSLATED_FIELDS = "FIRESTORE_REDUX_TRANSLATION_SET_TRANSLATED_FIELDS";
 export const SET_DOC_STATUS = "FIRESTORE_REDUX_TRANSLATION_SET_DOC_STATUS";
-export const REMOVE_DOC_TRANSLATION = "FIRESTORE_REDUX_TRANSLATION_REMOVE_DOC_TRANSLATION";
 export const APPLY_TRANSLATIONS = "FIRESTORE_REDUX_TRANSLATION_APPLY_TRANSLATIONS";
+export const REMOVE_DOC_TRANSLATIONS = "FIRESTORE_REDUX_TRANSLATION_REMOVE_DOC_TRANSLATIONS";
 
 /**
  * Replaces the whole schema in one call. A schema is optional - without one, only string fields
@@ -48,7 +48,7 @@ export const _addActivation = ({ id, filterFunction }) => {
 };
 
 /**
- * Removes an activation. Doesn't touch the documents it covered - see `_removeDocTranslation`.
+ * Removes an activation. Doesn't touch the documents it covered - see `_removeDocTranslations`.
  * @param {String} id Activation Id.
  * @private
  */
@@ -114,20 +114,6 @@ export const _setDocStatus = (collection, docId, { status, failedFields }) => {
 };
 
 /**
- * Removes a document's `docs` and `status` entries together.
- * @param {String} collection Collection / Subcollection ID.
- * @param {String} docId Document Id.
- * @private
- */
-export const _removeDocTranslation = (collection, docId) => {
-  return {
-    type: REMOVE_DOC_TRANSLATION,
-    collection,
-    docId,
-  };
-};
-
-/**
  * Applies many documents' translation results in a single dispatch.
  *
  * The per-document actions above each notify every store subscriber, and a translate response covers
@@ -143,5 +129,21 @@ export const _applyTranslations = (entries) => {
   return {
     type: APPLY_TRANSLATIONS,
     entries,
+  };
+};
+
+/**
+ * Removes many documents' translations in a single dispatch.
+ *
+ * Stopping an activation drops every document it covered, and a large board covers thousands - one
+ * dispatch each would re-render the whole app once per document, which is what made stopping a
+ * "View As" session appear to freeze.
+ *
+ * @param {Array} docs `[{ collection, docId }]` to remove.
+ */
+export const _removeDocTranslations = (docs) => {
+  return {
+    type: REMOVE_DOC_TRANSLATIONS,
+    docs,
   };
 };
