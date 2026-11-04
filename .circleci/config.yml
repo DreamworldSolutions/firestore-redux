@@ -1,4 +1,4 @@
-version: 2
+version: 2.1
 jobs:
   release-snapshot:
     docker:
@@ -24,7 +24,6 @@ jobs:
           command: npx semantic-release
 
 workflows:
-  version: 2
   release:
     jobs:
       - release-snapshot:
