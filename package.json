@@ -18,7 +18,7 @@
   },
   "homepage": "https://github.com/DreamworldSolutions/firestore-redux#readme",
   "dependencies": {
-    "@dreamworld/pwa-helpers": "^1.14.0",
+    "@dreamworld/pwa-helpers": "^3.0.2",
     "@dreamworld/uuid-base62": "^1.1.1",
     "@lifeomic/attempt": "^3.0.2",
     "firebase": "^10.13.1",
