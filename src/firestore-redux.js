@@ -209,10 +209,12 @@ class FirestoreRedux {
    */
   cancelQueryByRequester(requesterId) {
     const liveQueries = _selectors.liveQueriesByRequester(this.store.getState(),requesterId);
+    // By id, not by requester: the action is debounced, and by then the same requester may have started a new query,
+    // which must stay open.
     forEach(liveQueries, (id) => {
       this.__cancel(id);
+      cancelQueryActionDispatcher({ id }, this.store);
     });
-    cancelQueryActionDispatcher({ requesterId }, this.store);
   }
 
   /**
